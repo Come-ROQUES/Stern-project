@@ -632,14 +632,14 @@ function AppContent({
             <MetricCard
               title="Flow Imbalance"
               value={`${fmt(state.quant_lab.trade_flow_imbalance_btc, 4)} BTC`}
-              sub="buy minus sell aggressor flow"
+              sub="aggressor flow"
             />
           </div>
           <div className="span-3">
             <MetricCard
               title="Micro Bias"
               value={`${fmt(state.quant_lab.micro_bias_bps, 2)} bps`}
-              sub="micro-price vs mid-price"
+              sub="microstructure"
             />
           </div>
 
@@ -810,15 +810,11 @@ function AppContent({
           <div className="span-5">
             <GlassPanel title="Backtest Lane">
               <div className="badge-row">
-                <span className="badge">paper runtime parity</span>
-                <span className="badge">live feed replay</span>
-                <span className="badge">lite research lane</span>
+                <span className="badge">paper</span>
+                <span className="badge">replay</span>
+                <span className="badge">diagnostics</span>
               </div>
-              <div className="empty">
-                Cette lane n&apos;est pas un gros moteur offline complet. Elle
-                assume un role desk: replay de session, monitoring paper,
-                diagnostics de baseline.
-              </div>
+              <div className="empty">session diagnostics</div>
             </GlassPanel>
           </div>
         </div>
@@ -886,6 +882,7 @@ export function App(): JSX.Element {
           feed={`feed ${state?.runtime.feed_state ?? "warming"}`}
           risk={`risk ${state?.risk_status ?? "booting"}`}
           product={state?.product_id ?? "BTC-USD"}
+          activeTab={activeTab}
         />
         {error ? (
           <GlassPanel title="Runtime Error">
@@ -896,15 +893,9 @@ export function App(): JSX.Element {
           <AppContent activeTab={activeTab} state={state} />
         ) : (
           <GlassPanel title="Boot Sequence">
-            <div className="empty">
-              Connecting to Coinbase public feed and hydrating desk lanes...
-            </div>
+            <div className="empty">Hydrating runtime...</div>
           </GlassPanel>
         )}
-        <div className="foot">
-          Live public Coinbase data, paper strategy runtime only. No Coinbase
-          account, wallet or API key required.
-        </div>
       </main>
     </div>
   );

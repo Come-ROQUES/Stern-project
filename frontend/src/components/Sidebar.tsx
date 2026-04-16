@@ -6,31 +6,38 @@ type SidebarProps = {
 
 const tabs = [
   {
+    section: "DESK",
     id: "overview",
     title: "Overview",
-    subtitle: "Desk pulse, runtime lanes, equity, verdict",
+    code: "OVR",
   },
   {
+    section: "DESK",
     id: "market",
     title: "Market",
-    subtitle: "Order book, tape, spread lanes, microstructure",
+    code: "MKT",
   },
   {
+    section: "DESK",
     id: "strategy",
     title: "Strategy",
-    subtitle: "Quote engine, fills, inventory, risk guard",
+    code: "STR",
   },
   {
+    section: "QUANT",
     id: "quant-lab",
     title: "Quant Lab",
-    subtitle: "Research presets, regimes, micro-bias, flow",
+    code: "QLB",
   },
   {
+    section: "BACKTEST",
     id: "backtest",
     title: "Backtest",
-    subtitle: "Paper replay lane, equity and P&L diagnostics",
+    code: "BKT",
   },
 ];
+
+const sections = ["DESK", "QUANT", "BACKTEST"] as const;
 
 export function Sidebar({
   activeTab,
@@ -40,31 +47,35 @@ export function Sidebar({
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="eyebrow">Crypto Algo Trading Desk</div>
+        <div className="eyebrow">Fractal Systems</div>
         <h1>Fractal Crypto</h1>
-        <p>
-          Mini cockpit crypto reprenant l&apos;ADN visuel de FRACTAL:
-          control room, glass panels, quant lab, backtest lane et telemetry
-          live.
-        </p>
+        <div className="brand-subline">BTC-USD / MARKET MAKER / PAPER</div>
       </div>
 
       <nav className="nav">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            className={activeTab === tab.id ? "active" : ""}
-            onClick={() => onTabChange(tab.id)}
-            type="button"
-          >
-            <strong>{tab.title}</strong>
-            <span>{tab.subtitle}</span>
-          </button>
+        {sections.map((section) => (
+          <div className="nav-section" key={section}>
+            <div className="nav-section-label">{section}</div>
+            {tabs
+              .filter((tab) => tab.section === section)
+              .map((tab) => (
+                <button
+                  key={tab.id}
+                  className={activeTab === tab.id ? "active" : ""}
+                  onClick={() => onTabChange(tab.id)}
+                  type="button"
+                >
+                  <span className="nav-dot" />
+                  <strong>{tab.title}</strong>
+                  <span className="nav-code">{tab.code}</span>
+                </button>
+              ))}
+          </div>
         ))}
       </nav>
 
       <div className="sidebar-card">
-        <div className="panel-title">Desk Context</div>
+        <div className="panel-title">Runtime</div>
         <div
           className="context-block"
           dangerouslySetInnerHTML={{ __html: contextHtml }}
@@ -73,19 +84,13 @@ export function Sidebar({
 
       <div className="sidebar-card">
         <div className="panel-title">Workspace</div>
-        <div className="workspace-list">
-          <div className="workspace-item">
-            <strong>desk.overview</strong>
-            <span>runtime, pnl, exposure, verdict</span>
-          </div>
-          <div className="workspace-item">
-            <strong>market.micro</strong>
-            <span>book, tape, spreads, flow imbalance</span>
-          </div>
-          <div className="workspace-item">
-            <strong>research.quant</strong>
-            <span>regimes, presets, signal radar</span>
-          </div>
+        <div className="workspace-grid">
+          <span>desk.overview</span>
+          <span>market.micro</span>
+          <span>strategy.runtime</span>
+          <span>quant.regimes</span>
+          <span>backtest.replay</span>
+          <span>risk.guard</span>
         </div>
       </div>
 
