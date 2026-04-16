@@ -18,6 +18,12 @@ workflows internes, ni de donnees confidentielles.
   - exposition notionnelle max `1_000_000 USD`
   - perte max `100_000 USD`
 - dashboard web leger via FastAPI
+- dashboard multi-onglets type desk:
+  - `Overview`
+  - `Market`
+  - `Strategy`
+  - `Quant Lab`
+  - `Backtest`
 - CI GitHub et deploiement GitHub-first pour VM
 - kit de publication web avec DuckDNS + nginx + systemd
 

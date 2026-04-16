@@ -57,9 +57,13 @@ class SpreadTracker:
             }
         return result
 
+    def tail(self, points: int = 40) -> dict[str, list[float]]:
+        return {
+            _fmt_size(size): list(values)[-points:] for size, values in self._history.items()
+        }
+
 
 def _fmt_size(size: float) -> str:
     if size.is_integer():
         return f"{int(size)} BTC"
     return f"{size} BTC"
-
