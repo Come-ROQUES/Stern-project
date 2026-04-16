@@ -20,8 +20,8 @@ GitHub main
 
 Exemple:
 
-- sous-domaine: `fractal-crypto-mm`
-- domaine final: `fractal-crypto-mm.duckdns.org`
+- sous-domaine: `stern-project`
+- domaine final: `stern-project.duckdns.org`
 
 Configurer le token DuckDNS dans ton compte et pointer le domaine vers l'IP
 publique de la VM.
@@ -115,7 +115,7 @@ Valeurs typiques:
 - `DEPLOY_APP_DIR=/opt/crypto-trading-desk-intern`
 - `DEPLOY_BRANCH=main`
 - `DEPLOY_PORT=22`
-- `PUBLIC_DOMAIN=fractal-crypto-mm.duckdns.org`
+- `PUBLIC_DOMAIN=stern-project.duckdns.org`
 
 ## 9. Strategie propre
 
