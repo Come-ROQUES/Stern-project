@@ -17,8 +17,9 @@ workflows internes, ni de donnees confidentielles.
 - controles de risque:
   - exposition notionnelle max `1_000_000 USD`
   - perte max `100_000 USD`
-- dashboard web leger via FastAPI
-- dashboard multi-onglets type desk:
+- backend FastAPI + frontend React/Vite
+- dashboard multi-onglets type terminal desk, inspire au maximum du langage
+  visuel FRACTAL:
   - `Overview`
   - `Market`
   - `Strategy`
@@ -37,7 +38,10 @@ src/crypto_mm/
   portfolio/   position, fills, PnL
   risk/        limites de risque
   strategy/    market maker simule
-  ui/          API FastAPI + dashboard HTML
+  ui/          API FastAPI + serveur SPA React
+frontend/
+  src/         cockpit React type terminal
+  dist/        build Vite servi par FastAPI
 ```
 
 ## Demarrage local
@@ -47,6 +51,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
+npm --prefix frontend install
 python -m crypto_mm.main
 ```
 

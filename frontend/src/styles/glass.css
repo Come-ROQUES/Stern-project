@@ -1,0 +1,102 @@
+:root {
+  --bg-primary: #050510;
+  --bg-secondary: #0a0e18;
+  --bg-glass: rgba(255, 255, 255, 0.015);
+  --bg-glass-hover: rgba(255, 255, 255, 0.03);
+  --bg-glass-active: rgba(255, 255, 255, 0.05);
+  --border-glass: rgba(0, 255, 136, 0.06);
+  --border-glass-hover: rgba(0, 255, 136, 0.12);
+  --text-primary: #e8ebe8;
+  --text-secondary: #8a918a;
+  --text-muted: #4a524a;
+  --status-nominal: #00ff88;
+  --status-warning: #eab308;
+  --status-critical: #ef4444;
+  --status-info: #2ce3ff;
+  --accent-primary: #00ff88;
+  --accent-secondary: #2ce3ff;
+  --accent-glow: 0 0 20px rgba(0, 255, 136, 0.15);
+  --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --transition-base: 200ms ease-out;
+}
+
+.glass-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-glass);
+  background: rgba(10, 14, 24, 0.88);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 18px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(18px);
+  transition:
+    transform var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+.glass-panel:hover {
+  transform: translate3d(0, -2px, 0);
+  border-color: var(--border-glass-hover);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(0, 255, 136, 0.06),
+    0 0 24px rgba(0, 255, 136, 0.05);
+}
+
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.8;
+  background:
+    linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.06) 0%,
+      rgba(255, 255, 255, 0.02) 35%,
+      transparent 60%
+    ),
+    radial-gradient(circle at 12% 0%, rgba(0, 255, 136, 0.07), transparent 24%);
+}
+
+.panel-inner {
+  position: relative;
+  z-index: 1;
+  padding: 18px;
+}
+
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+}
+
+.panel-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.metric-value {
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  margin-top: 6px;
+}
+
+.metric-sub {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+

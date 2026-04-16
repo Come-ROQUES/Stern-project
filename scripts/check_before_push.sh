@@ -23,3 +23,7 @@ $MYPY src
 echo "3/3 pytest"
 $PYTEST -q
 
+if [ -f "frontend/package.json" ]; then
+  echo "4/4 frontend build"
+  npm --prefix frontend run build
+fi
