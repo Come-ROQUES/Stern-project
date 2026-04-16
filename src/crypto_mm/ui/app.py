@@ -16,6 +16,7 @@ service = MarketDataService(settings=settings)
 APP_ROOT = Path(__file__).resolve().parents[3]
 FRONTEND_DIST = APP_ROOT / "frontend" / "dist"
 FRONTEND_ASSETS = FRONTEND_DIST / "assets"
+HTML_HEADERS = {"Cache-Control": "no-store, max-age=0"}
 
 
 @asynccontextmanager
@@ -48,8 +49,8 @@ if FRONTEND_ASSETS.exists():
 @app.get("/", response_class=HTMLResponse, response_model=None)
 async def home() -> Response:
     if FRONTEND_DIST.exists():
-        return FileResponse(FRONTEND_DIST / "index.html")
-    return HTMLResponse(_fallback_html())
+        return FileResponse(FRONTEND_DIST / "index.html", headers=HTML_HEADERS)
+    return HTMLResponse(_fallback_html(), headers=HTML_HEADERS)
 
 
 @app.get("/{path:path}", response_class=HTMLResponse, response_model=None)
@@ -60,8 +61,8 @@ async def spa_fallback(path: str) -> Response:
         candidate = FRONTEND_DIST / path
         if candidate.exists() and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(FRONTEND_DIST / "index.html")
-    return HTMLResponse(_fallback_html())
+        return FileResponse(FRONTEND_DIST / "index.html", headers=HTML_HEADERS)
+    return HTMLResponse(_fallback_html(), headers=HTML_HEADERS)
 
 
 def _fallback_html() -> str:
