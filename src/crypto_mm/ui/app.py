@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from crypto_mm.common.settings import settings
@@ -45,15 +45,15 @@ if FRONTEND_ASSETS.exists():
     )
 
 
-@app.get("/", response_class=HTMLResponse)
-async def home() -> HTMLResponse | FileResponse:
+@app.get("/", response_class=HTMLResponse, response_model=None)
+async def home() -> Response:
     if FRONTEND_DIST.exists():
         return FileResponse(FRONTEND_DIST / "index.html")
     return HTMLResponse(_fallback_html())
 
 
-@app.get("/{path:path}", response_class=HTMLResponse)
-async def spa_fallback(path: str) -> HTMLResponse | FileResponse:
+@app.get("/{path:path}", response_class=HTMLResponse, response_model=None)
+async def spa_fallback(path: str) -> Response:
     if path.startswith("api/"):
         return HTMLResponse("Not Found", status_code=404)
     if FRONTEND_DIST.exists():
