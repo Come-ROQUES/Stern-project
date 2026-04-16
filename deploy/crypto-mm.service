@@ -1,6 +1,7 @@
 [Unit]
 Description=Crypto Trading Desk Intern
 After=network.target
+Wants=network-online.target
 
 [Service]
 User=ubuntu
@@ -9,6 +10,7 @@ EnvironmentFile=/opt/crypto-trading-desk-intern/.env
 ExecStart=/opt/crypto-trading-desk-intern/.venv/bin/python -m crypto_mm.main
 Restart=always
 RestartSec=3
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target

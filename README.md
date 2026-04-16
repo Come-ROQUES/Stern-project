@@ -18,7 +18,8 @@ workflows internes, ni de donnees confidentielles.
   - exposition notionnelle max `1_000_000 USD`
   - perte max `100_000 USD`
 - dashboard web leger via FastAPI
-- CI GitHub et base de deploiement GitHub-first pour VM
+- CI GitHub et deploiement GitHub-first pour VM
+- kit de publication web avec DuckDNS + nginx + systemd
 
 ## Architecture
 
@@ -51,7 +52,28 @@ Puis ouvrir `http://127.0.0.1:8015`.
 ./scripts/check_before_push.sh
 ```
 
+## Publication Internet
+
+Le repo contient un kit pour exposition publique sur une VM:
+
+- workflow GitHub Actions de deploiement apres push sur `main`
+- service `systemd` dans `deploy/crypto-mm.service`
+- reverse proxy nginx dans `deploy/nginx.conf`
+- runbook DuckDNS + TLS dans [docs/DEPLOY_DUCKDNS.md](docs/DEPLOY_DUCKDNS.md)
+
 ## Frontiere de confidentialite
 
 Voir `docs/CONFIDENTIALITY_BOUNDARY.md`.
 
+## Workflow recommande
+
+```bash
+git checkout -b feat/website-rollout
+# modifications
+./scripts/check_before_push.sh
+git add -A
+git commit -m "feat: prepare duckdns deployment"
+git push -u origin feat/website-rollout
+```
+
+Puis merge de la PR vers `main` pour laisser GitHub Actions deployer.
