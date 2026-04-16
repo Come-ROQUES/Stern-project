@@ -1,6 +1,7 @@
 name: deploy
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -33,17 +34,21 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_APP_DIR: ${{ secrets.DEPLOY_APP_DIR }}
-          DEPLOY_BRANCH: ${{ secrets.DEPLOY_BRANCH }}
           PUBLIC_DOMAIN: ${{ secrets.PUBLIC_DOMAIN }}
         run: |
           PORT="${DEPLOY_PORT:-22}"
-          BRANCH="${DEPLOY_BRANCH:-main}"
-          ssh -p "${PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
+          tar \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.venv' \
+            --exclude='__pycache__' \
+            --exclude='.pytest_cache' \
+            --exclude='.mypy_cache' \
+            -czf - . | ssh -p "${PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
             set -euo pipefail
+            mkdir -p '${DEPLOY_APP_DIR}'
+            tar -xzf - -C '${DEPLOY_APP_DIR}'
             cd '${DEPLOY_APP_DIR}'
-            git fetch origin
-            git checkout '${BRANCH}'
-            git pull --ff-only origin '${BRANCH}'
             python3.11 -m venv .venv
             .venv/bin/pip install --upgrade pip
             .venv/bin/pip install -e .

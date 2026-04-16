@@ -9,7 +9,7 @@ DuckDNS et un deploiement pilote par GitHub Actions.
 GitHub main
   -> GitHub Actions deploy
   -> SSH vers VM
-  -> git pull du repo
+  -> sync des fichiers applicatifs
   -> refresh .venv
   -> restart systemd
   -> nginx reverse proxy
@@ -106,14 +106,12 @@ Dans `Settings > Secrets and variables > Actions`, ajouter:
 - `DEPLOY_USER`
 - `DEPLOY_SSH_KEY`
 - `DEPLOY_APP_DIR`
-- `DEPLOY_BRANCH`
 - `DEPLOY_PORT`
 - `PUBLIC_DOMAIN`
 
 Valeurs typiques:
 
 - `DEPLOY_APP_DIR=/opt/crypto-trading-desk-intern`
-- `DEPLOY_BRANCH=main`
 - `DEPLOY_PORT=22`
 - `PUBLIC_DOMAIN=stern-project.duckdns.org`
 
