@@ -52,7 +52,15 @@ jobs:
             python3.11 -m venv .venv
             .venv/bin/pip install --upgrade pip
             .venv/bin/pip install -e .
+            if [ ! -f .env ]; then cp .env.example .env; fi
             sudo systemctl restart crypto-mm
-            curl -fsS http://127.0.0.1:8015/api/state > /tmp/crypto-mm-health.json
+            rm -f /tmp/crypto-mm-health.json
+            for i in 1 2 3 4 5; do
+              if curl -fsS http://127.0.0.1:8015/api/state > /tmp/crypto-mm-health.json; then
+                break
+              fi
+              sleep 2
+            done
+            test -s /tmp/crypto-mm-health.json
             echo 'deployed ' \"${PUBLIC_DOMAIN}\"
           "
