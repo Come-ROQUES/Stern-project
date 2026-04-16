@@ -5,9 +5,9 @@ __pycache__/
 .ruff_cache/
 dist/
 build/
+*.egg-info/
 *.pyc
 *.pyo
 .env
 coverage.xml
 htmlcov/
-
