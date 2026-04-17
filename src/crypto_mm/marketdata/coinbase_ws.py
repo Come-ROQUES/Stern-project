@@ -20,6 +20,7 @@ from crypto_mm.risk.limits import RiskLimits
 from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
 
 logger = logging.getLogger(__name__)
+EVENT_LOOP_YIELD_EVERY = 25
 
 
 class MarketDataService:
@@ -89,6 +90,9 @@ class MarketDataService:
             async for raw_message in ws:
                 message = json.loads(raw_message)
                 await self._handle_message(message)
+                if self._message_count % EVENT_LOOP_YIELD_EVERY == 0:
+                    # Let uvicorn serve pending HTTP requests under sustained market flow.
+                    await asyncio.sleep(0)
 
     async def _handle_message(self, message: dict[str, object]) -> None:
         msg_type = str(message.get("type", ""))
