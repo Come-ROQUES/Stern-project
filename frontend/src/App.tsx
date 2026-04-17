@@ -1282,10 +1282,8 @@ export function App(): JSX.Element {
         <Topbar
           feed={`feed ${state?.runtime.feed_state ?? "warming"}`}
           risk={`risk ${state?.risk_status ?? "booting"}`}
-          quant={`quant ${state?.quant_lab.readiness ?? "warming"}`}
           product={state?.product_id ?? "BTC-USD"}
           activeTab={activeTab}
-          messagesSeen={intFmt(state?.runtime.messages_seen)}
         />
         {error ? (
           <GlassPanel title="Runtime Error">
