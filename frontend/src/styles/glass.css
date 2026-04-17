@@ -1,21 +1,21 @@
 :root {
-  --bg-primary: #050510;
-  --bg-secondary: #0a0e18;
+  --bg-primary: #060910;
+  --bg-secondary: #0d1422;
   --bg-glass: rgba(255, 255, 255, 0.015);
   --bg-glass-hover: rgba(255, 255, 255, 0.03);
   --bg-glass-active: rgba(255, 255, 255, 0.05);
-  --border-glass: rgba(0, 255, 136, 0.06);
-  --border-glass-hover: rgba(0, 255, 136, 0.12);
+  --border-glass: rgba(255, 255, 255, 0.08);
+  --border-glass-hover: rgba(255, 255, 255, 0.12);
   --text-primary: #e8ebe8;
   --text-secondary: #8a918a;
   --text-muted: #4a524a;
-  --status-nominal: #00ff88;
+  --status-nominal: #2ce3ff;
   --status-warning: #eab308;
   --status-critical: #ef4444;
   --status-info: #2ce3ff;
-  --accent-primary: #00ff88;
+  --accent-primary: #2ce3ff;
   --accent-secondary: #2ce3ff;
-  --accent-glow: 0 0 20px rgba(0, 255, 136, 0.15);
+  --accent-glow: 0 0 20px rgba(44, 227, 255, 0.15);
   --shadow-soft: 0 18px 40px rgba(0, 0, 0, 0.35);
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -32,10 +32,10 @@
   overflow: hidden;
   border-radius: var(--radius-xl);
   border: 1px solid var(--border-glass);
-  background: rgba(10, 14, 24, 0.88);
+  background: rgba(255, 255, 255, 0.025);
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 18px 40px rgba(0, 0, 0, 0.35),
+    0 18px 40px rgba(0, 0, 0, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   backdrop-filter: blur(18px);
   transition:
@@ -48,9 +48,9 @@
   transform: translate3d(0, -2px, 0);
   border-color: var(--border-glass-hover);
   box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(0, 255, 136, 0.06),
-    0 0 24px rgba(0, 255, 136, 0.05);
+    0 18px 40px rgba(0, 0, 0, 0.26),
+    0 0 0 1px rgba(44, 227, 255, 0.06),
+    0 0 24px rgba(44, 227, 255, 0.04);
 }
 
 .glass-panel::before {
@@ -66,7 +66,7 @@
       rgba(255, 255, 255, 0.02) 35%,
       transparent 60%
     ),
-    radial-gradient(circle at 12% 0%, rgba(0, 255, 136, 0.07), transparent 24%);
+    radial-gradient(circle at 12% 0%, rgba(44, 227, 255, 0.07), transparent 24%);
 }
 
 .panel-inner {
@@ -127,7 +127,7 @@
   height: 7px;
   border-radius: 999px;
   background: var(--accent-primary);
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.65);
+  box-shadow: 0 0 10px rgba(44, 227, 255, 0.5);
   animation: glowPulse 2.4s ease-in-out infinite;
 }
 

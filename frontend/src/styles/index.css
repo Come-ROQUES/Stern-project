@@ -1,8 +1,8 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap");
+@import "./glass.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "./glass.css";
 
 :root {
   color-scheme: dark;
@@ -23,9 +23,9 @@ body {
     sans-serif;
   background-color: var(--bg-primary);
   background-image:
-    radial-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
-    radial-gradient(circle at 14% 20%, rgba(44, 227, 255, 0.08), transparent 22%),
-    radial-gradient(circle at 80% 10%, rgba(88, 110, 168, 0.08), transparent 20%),
+    radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at 14% 18%, rgba(44, 227, 255, 0.08), transparent 22%),
+    radial-gradient(circle at 78% 10%, rgba(148, 163, 184, 0.08), transparent 22%),
     radial-gradient(circle at 60% 76%, rgba(44, 227, 255, 0.04), transparent 28%);
   background-size: 24px 24px, auto, auto, auto;
   color: var(--text-primary);
@@ -47,8 +47,8 @@ button {
   display: flex;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 14%),
-    #050812;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 14%),
+    linear-gradient(180deg, rgba(7, 10, 18, 0.98), rgba(6, 9, 16, 0.98));
 }
 
 .sidebar {
@@ -56,12 +56,12 @@ button {
   top: 0;
   height: 100vh;
   overflow-y: auto;
-  width: 280px;
+  width: 296px;
   flex-shrink: 0;
-  border-right: 1px solid rgba(0, 255, 136, 0.06);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 12%),
-    linear-gradient(180deg, rgba(6, 9, 18, 0.98), rgba(4, 7, 15, 0.96));
+    linear-gradient(180deg, rgba(8, 11, 19, 0.98), rgba(7, 10, 18, 0.96));
   backdrop-filter: blur(30px) saturate(1.6);
 }
 
@@ -72,8 +72,8 @@ button {
   pointer-events: none;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 20%),
-    radial-gradient(circle at 20% 8%, rgba(0, 255, 136, 0.09), transparent 28%),
-    radial-gradient(circle at 80% 90%, rgba(44, 227, 255, 0.04), transparent 20%);
+    radial-gradient(circle at 20% 8%, rgba(44, 227, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 80% 90%, rgba(148, 163, 184, 0.04), transparent 20%);
 }
 
 .sidebar > * {
@@ -81,11 +81,133 @@ button {
   z-index: 1;
 }
 
+.sidebar-brand {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
 .main {
   flex: 1;
   min-width: 0;
   padding: 18px 22px 26px;
 }
+
+.main-bento {
+  flex: 1;
+  min-width: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 14px;
+  overflow: hidden;
+}
+
+.topbar-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 70%),
+    rgba(255, 255, 255, 0.025);
+}
+
+/* ===== BENTO GRIDS ===== */
+
+/* Overview */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto minmax(260px, 1fr) minmax(180px, 0.7fr);
+  gap: 10px;
+}
+
+.bento-kpi-1 { grid-column: span 3; }
+.bento-kpi-2 { grid-column: span 3; }
+.bento-kpi-3 { grid-column: span 3; }
+.bento-kpi-4 { grid-column: span 3; }
+.bento-overview-equity { grid-column: span 7; min-height: 0; }
+.bento-overview-runtime { grid-column: span 5; min-height: 0; }
+.bento-overview-strategy { grid-column: span 3; min-height: 0; }
+.bento-overview-market { grid-column: span 3; min-height: 0; }
+.bento-overview-portfolio { grid-column: span 3; min-height: 0; }
+.bento-overview-fills { grid-column: span 3; min-height: 0; }
+
+/* Price action */
+.bento-grid-price {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: minmax(340px, 1.2fr) minmax(220px, 0.8fr);
+  gap: 10px;
+}
+
+.bento-p-chart { grid-column: span 8; min-height: 0; }
+.bento-p-depth { grid-column: span 4; min-height: 0; }
+.bento-p-tob { grid-column: span 3; min-height: 0; }
+.bento-p-flow { grid-column: span 3; min-height: 0; }
+.bento-p-book { grid-column: span 3; min-height: 0; }
+.bento-p-tape { grid-column: span 3; min-height: 0; }
+
+/* Market */
+.bento-grid-market {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: 1fr 0.8fr auto;
+  gap: 10px;
+}
+
+.bento-m-depth { grid-column: span 7; }
+.bento-m-book { grid-column: span 5; }
+.bento-m-tape { grid-column: span 5; }
+.bento-m-spread { grid-column: span 4; }
+.bento-m-flow { grid-column: span 3; }
+.bento-m-micro { grid-column: span 6; }
+.bento-m-tob { grid-column: span 6; }
+
+/* Strategy */
+.bento-grid-strategy {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto 1fr 0.7fr;
+  gap: 10px;
+}
+
+.bento-s-risk { grid-column: span 4; }
+.bento-s-quote { grid-column: span 4; }
+.bento-s-fills { grid-column: span 4; }
+.bento-s-replay { grid-column: span 7; }
+.bento-s-inv { grid-column: span 5; }
+.bento-s-config { grid-column: span 5; }
+.bento-s-table { grid-column: span 7; }
+
+/* Quant */
+.bento-grid-quant {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto 1fr 0.6fr;
+  gap: 10px;
+}
+
+.bento-q-vol { grid-column: span 3; }
+.bento-q-mom { grid-column: span 3; }
+.bento-q-flow { grid-column: span 3; }
+.bento-q-bias { grid-column: span 3; }
+.bento-q-radar { grid-column: span 5; }
+.bento-q-presets { grid-column: span 7; }
+.bento-q-regimes { grid-column: span 7; }
+.bento-q-research { grid-column: span 5; }
+
+/* Backtest */
+.bento-grid-backtest {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-template-rows: auto 1fr 0.6fr;
+  gap: 10px;
+}
+
+.bento-b-mode { grid-column: span 3; }
+.bento-b-pnl { grid-column: span 3; }
+.bento-b-dd { grid-column: span 3; }
+.bento-b-uptime { grid-column: span 3; }
+.bento-b-equity { grid-column: span 6; }
+.bento-b-pnl-chart { grid-column: span 6; }
+.bento-b-metrics { grid-column: span 6; }
+.bento-b-parity { grid-column: span 6; }
 
 /* scrollbar */
 ::-webkit-scrollbar {
@@ -440,12 +562,76 @@ tr:hover td {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
+  .main-bento {
+    height: auto;
+    overflow: visible;
+  }
+
   .desk-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 960px) {
+  .bento-grid,
+  .bento-grid-price,
+  .bento-grid-market,
+  .bento-grid-strategy,
+  .bento-grid-quant,
+  .bento-grid-backtest {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .bento-kpi-1,
+  .bento-kpi-2,
+  .bento-kpi-3,
+  .bento-kpi-4,
+  .bento-overview-equity,
+  .bento-overview-runtime,
+  .bento-overview-strategy,
+  .bento-overview-market,
+  .bento-overview-portfolio,
+  .bento-overview-fills,
+  .bento-p-chart,
+  .bento-p-depth,
+  .bento-p-tob,
+  .bento-p-flow,
+  .bento-p-book,
+  .bento-p-tape,
+  .bento-m-depth,
+  .bento-m-book,
+  .bento-m-tape,
+  .bento-m-spread,
+  .bento-m-flow,
+  .bento-m-micro,
+  .bento-m-tob,
+  .bento-s-risk,
+  .bento-s-quote,
+  .bento-s-fills,
+  .bento-s-replay,
+  .bento-s-inv,
+  .bento-s-config,
+  .bento-s-table,
+  .bento-q-vol,
+  .bento-q-mom,
+  .bento-q-flow,
+  .bento-q-bias,
+  .bento-q-radar,
+  .bento-q-presets,
+  .bento-q-regimes,
+  .bento-q-research,
+  .bento-b-mode,
+  .bento-b-pnl,
+  .bento-b-dd,
+  .bento-b-uptime,
+  .bento-b-equity,
+  .bento-b-pnl-chart,
+  .bento-b-metrics,
+  .bento-b-parity {
+    grid-column: auto;
+  }
+
   .span-3,
   .span-4,
   .span-5,
@@ -461,6 +647,10 @@ tr:hover td {
 
   .main {
     padding: 18px;
+  }
+
+  .main-bento {
+    padding: 10px;
   }
 
   .desk-strip {
