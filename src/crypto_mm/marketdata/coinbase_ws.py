@@ -20,7 +20,7 @@ from crypto_mm.risk.limits import RiskLimits
 from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
 
 logger = logging.getLogger(__name__)
-EVENT_LOOP_YIELD_EVERY = 25
+EVENT_LOOP_YIELD_EVERY = 1
 
 
 class MarketDataService:
@@ -53,8 +53,6 @@ class MarketDataService:
                 max_loss=settings.max_loss,
             ),
         )
-        self._lock = asyncio.Lock()
-
     async def run_forever(self) -> None:
         while True:
             try:
@@ -98,22 +96,21 @@ class MarketDataService:
         msg_type = str(message.get("type", ""))
         channel = str(message.get("channel", ""))
         self._message_count += 1
-        async with self._lock:
-            if msg_type == "error":
-                logger.warning("coinbase subscription error: %s", message)
-                return
-            if channel == "l2_data":
-                self._handle_l2_message(message)
-            elif channel == "market_trades":
-                self._handle_market_trades_message(message)
+        if msg_type == "error":
+            logger.warning("coinbase subscription error: %s", message)
+            return
+        if channel == "l2_data":
+            self._handle_l2_message(message)
+        elif channel == "market_trades":
+            self._handle_market_trades_message(message)
 
-            mid = self.order_book.mid_price()
-            if mid is None:
-                return
-            quote = self.market_maker.update_quote(mid_price=mid)
-            spreads = compute_depth_spreads(self.order_book)
-            self.spread_tracker.record(spreads)
-            self._record_live_snapshots(mid=mid, quote_active=quote is not None)
+        mid = self.order_book.mid_price()
+        if mid is None:
+            return
+        quote = self.market_maker.update_quote(mid_price=mid)
+        spreads = compute_depth_spreads(self.order_book)
+        self.spread_tracker.record(spreads)
+        self._record_live_snapshots(mid=mid, quote_active=quote is not None)
 
     def _handle_l2_message(self, message: dict[str, object]) -> None:
         events = message.get("events", [])
@@ -189,39 +186,38 @@ class MarketDataService:
                     self.simulated_fills.appendleft(fill.model_dump(mode="json"))
 
     async def state_snapshot(self) -> dict[str, object]:
-        async with self._lock:
-            top = self.order_book.top_n(10)
-            mid = self.order_book.mid_price()
-            mark_price = mid or 0.0
-            quote = self.market_maker.last_quote
-            portfolio = self.portfolio.snapshot(mark_price=mark_price)
-            spread_metrics = self.spread_tracker.summary()
-            return {
-                "product_id": self._settings.product_id,
-                "mid_price": mid,
-                "best_bid": top["bids"][0].model_dump() if top["bids"] else None,
-                "best_ask": top["asks"][0].model_dump() if top["asks"] else None,
-                "book": {
-                    "bids": [level.model_dump() for level in top["bids"]],
-                    "asks": [level.model_dump() for level in top["asks"]],
-                },
-                "recent_trades": [trade.model_dump(mode="json") for trade in self.trade_tape],
-                "spread_metrics": spread_metrics,
-                "spread_history": self.spread_tracker.tail(),
-                "mid_history": list(self.mid_history),
-                "quote": quote.model_dump(mode="json") if quote is not None else None,
-                "risk_status": self.market_maker.risk_status,
-                "portfolio": portfolio,
-                "fills": list(self.simulated_fills),
-                "runtime": self._runtime_snapshot(top=top, mid=mid),
-                "strategy": self._strategy_snapshot(quote=quote, portfolio=portfolio),
-                "quant_lab": self._quant_lab_snapshot(
-                    top=top,
-                    mid=mid,
-                    spread_metrics=spread_metrics,
-                ),
-                "backtest_lite": self._backtest_snapshot(portfolio=portfolio),
-            }
+        top = self.order_book.top_n(10)
+        mid = self.order_book.mid_price()
+        mark_price = mid or 0.0
+        quote = self.market_maker.last_quote
+        portfolio = self.portfolio.snapshot(mark_price=mark_price)
+        spread_metrics = self.spread_tracker.summary()
+        return {
+            "product_id": self._settings.product_id,
+            "mid_price": mid,
+            "best_bid": top["bids"][0].model_dump() if top["bids"] else None,
+            "best_ask": top["asks"][0].model_dump() if top["asks"] else None,
+            "book": {
+                "bids": [level.model_dump() for level in top["bids"]],
+                "asks": [level.model_dump() for level in top["asks"]],
+            },
+            "recent_trades": [trade.model_dump(mode="json") for trade in self.trade_tape],
+            "spread_metrics": spread_metrics,
+            "spread_history": self.spread_tracker.tail(),
+            "mid_history": list(self.mid_history),
+            "quote": quote.model_dump(mode="json") if quote is not None else None,
+            "risk_status": self.market_maker.risk_status,
+            "portfolio": portfolio,
+            "fills": list(self.simulated_fills),
+            "runtime": self._runtime_snapshot(top=top, mid=mid),
+            "strategy": self._strategy_snapshot(quote=quote, portfolio=portfolio),
+            "quant_lab": self._quant_lab_snapshot(
+                top=top,
+                mid=mid,
+                spread_metrics=spread_metrics,
+            ),
+            "backtest_lite": self._backtest_snapshot(portfolio=portfolio),
+        }
 
     def _record_live_snapshots(self, mid: float, quote_active: bool) -> None:
         now = datetime.now(tz=UTC)

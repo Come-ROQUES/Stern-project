@@ -169,5 +169,6 @@ websockets.exceptions.ConnectionClosedError: sent 1011 (internal error) keepaliv
 ```
 
 - Correctif applique:
-  la boucle Coinbase rend periodiquement la main a l'event loop pour laisser
-  `uvicorn` servir les requetes HTTP sous flux soutenu.
+  la boucle Coinbase rend maintenant la main a chaque message pour laisser
+  `uvicorn` servir les requetes HTTP sous flux soutenu, et le snapshot dashboard
+  n'attend plus un lock partage avec le traitement du feed.
