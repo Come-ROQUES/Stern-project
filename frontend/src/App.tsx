@@ -101,6 +101,10 @@ function tradesFlowData(trades: PublicTrade[]): Data[] {
   ];
 }
 
+function sum(values: number[]): number {
+  return values.reduce((acc, value) => acc + value, 0);
+}
+
 function AppContent({
   activeTab,
   state,
@@ -111,6 +115,57 @@ function AppContent({
   const totalPnl =
     (state.portfolio.realized_pnl || 0) +
     (state.portfolio.unrealized_pnl || 0);
+  const recentTrades = state.recent_trades.slice(0, 40);
+  const buyTrades = recentTrades.filter((trade) => trade.side === "buy");
+  const sellTrades = recentTrades.filter((trade) => trade.side === "sell");
+  const buyVolume = sum(buyTrades.map((trade) => trade.size));
+  const sellVolume = sum(sellTrades.map((trade) => trade.size));
+  const totalVolume = buyVolume + sellVolume;
+  const weightedNotional = sum(
+    recentTrades.map((trade) => trade.price * trade.size)
+  );
+  const tapeVwap = totalVolume > 0 ? weightedNotional / totalVolume : null;
+  const lastTradePrice = recentTrades[0]?.price ?? null;
+  const tradeSizes = recentTrades.map((trade) => trade.size);
+  const avgTradeSize =
+    tradeSizes.length > 0 ? sum(tradeSizes) / tradeSizes.length : null;
+  const tradePrices = recentTrades.map((trade) => trade.price);
+  const tapeHigh =
+    tradePrices.length > 0 ? Math.max(...tradePrices) : null;
+  const tapeLow =
+    tradePrices.length > 0 ? Math.min(...tradePrices) : null;
+  const tapeRange =
+    tapeHigh !== null && tapeLow !== null ? tapeHigh - tapeLow : null;
+  const topSpread =
+    state.best_bid && state.best_ask
+      ? state.best_ask.price - state.best_bid.price
+      : null;
+  const topSpreadBps =
+    topSpread !== null && state.mid_price
+      ? (topSpread / state.mid_price) * 10_000
+      : null;
+  const quoteWidth =
+    state.quote != null ? state.quote.ask_price - state.quote.bid_price : null;
+  const quoteWidthBps =
+    quoteWidth !== null && state.mid_price
+      ? (quoteWidth / state.mid_price) * 10_000
+      : null;
+  const inventoryUtilPct =
+    state.strategy.config.max_notional_exposure > 0
+      ? (Math.abs(state.portfolio.exposure_usd) /
+          state.strategy.config.max_notional_exposure) *
+        100
+      : 0;
+  const fillCadence =
+    state.runtime.trade_events > 0
+      ? (state.strategy.fill_count / state.runtime.trade_events) * 100
+      : 0;
+  const buySellSkew =
+    totalVolume > 0 ? ((buyVolume - sellVolume) / totalVolume) * 100 : 0;
+  const bestBidSize = state.best_bid?.size ?? null;
+  const bestAskSize = state.best_ask?.size ?? null;
+  const topDepthTotal =
+    (bestBidSize ?? 0) + (bestAskSize ?? 0);
 
   const overviewMidData: Data[] = [
     {
@@ -276,6 +331,38 @@ function AppContent({
     fmt(regime.last, 2),
     fmt(regime.avg, 2),
   ]);
+  const pulseRows = [
+    ["Feed", state.runtime.feed_state],
+    ["Trades", intFmt(state.runtime.trade_events)],
+    ["Mid", state.mid_price == null ? "-" : money(state.mid_price)],
+    ["Top spread", topSpreadBps == null ? "-" : `${fmt(topSpreadBps, 2)} bps`],
+    ["VWAP", tapeVwap == null ? "-" : money(tapeVwap)],
+    ["Tape range", tapeRange == null ? "-" : money(tapeRange)],
+  ];
+  const tapeRows = [
+    ["Buy volume", `${fmt(buyVolume, 4)} BTC`],
+    ["Sell volume", `${fmt(sellVolume, 4)} BTC`],
+    ["Buy/sell skew", `${fmt(buySellSkew, 2)}%`],
+    ["Avg trade", avgTradeSize == null ? "-" : `${fmt(avgTradeSize, 5)} BTC`],
+    ["Last trade", lastTradePrice == null ? "-" : money(lastTradePrice)],
+    ["Trades shown", intFmt(recentTrades.length)],
+  ];
+  const quoteRows = [
+    ["Quote state", state.strategy.quote_active ? "active" : "paused"],
+    ["Quote width", quoteWidthBps == null ? "-" : `${fmt(quoteWidthBps, 2)} bps`],
+    ["Inventory util", `${fmt(inventoryUtilPct, 2)}%`],
+    ["Fill cadence", `${fmt(fillCadence, 2)}%`],
+    ["Top depth", topDepthTotal > 0 ? `${fmt(topDepthTotal, 4)} BTC` : "-"],
+    ["Risk", state.risk_status],
+  ];
+  const replayRows = [
+    ["P&L", money(state.backtest_lite.total_pnl_usd)],
+    ["Return", percent(state.backtest_lite.paper_return_pct, 3)],
+    ["Peak", money(state.backtest_lite.peak_equity_usd)],
+    ["Drawdown", money(state.backtest_lite.max_drawdown_usd)],
+    ["Fill volume", `${fmt(state.backtest_lite.fill_volume_btc, 4)} BTC`],
+    ["Fill notional", money(state.backtest_lite.fill_notional_usd)],
+  ];
 
   return (
     <div className="tab-panels">
@@ -412,6 +499,42 @@ function AppContent({
           <div className="span-6">
             <PlotCard title="Equity Curve" data={overviewEquityData} />
           </div>
+          <div className="span-4">
+            <GlassPanel title="Market Snapshot">
+              <div className="mini-grid">
+                {pulseRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Tape Summary">
+              <div className="mini-grid">
+                {tapeRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Replay Snapshot">
+              <div className="mini-grid">
+                {replayRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
         </div>
       </section>
 
@@ -419,7 +542,22 @@ function AppContent({
         <div className="grid">
           <div className="span-6">
             <GlassPanel title="Order Book">
-              <DataTable headers={["Side", "Price", "Size"]} rows={bookRows} />
+              {bookRows.length > 0 ? (
+                <DataTable headers={["Side", "Price", "Size"]} rows={bookRows} />
+              ) : (
+                <div className="panel-fallback">
+                  <strong>Book warming</strong>
+                  <span>Trades are live, level2 depth still hydrating.</span>
+                  <div className="mini-grid">
+                    {pulseRows.map(([label, value]) => (
+                      <div className="mini-kpi" key={label}>
+                        <span>{label}</span>
+                        <strong>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </GlassPanel>
           </div>
           <div className="span-6">
@@ -483,6 +621,56 @@ function AppContent({
           </div>
           <div className="span-6">
             <PlotCard title="Trade Side Flow" data={tradesFlowData(state.recent_trades)} />
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Tape Diagnostics">
+              <div className="mini-grid">
+                {tapeRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Top Of Book">
+              <div className="mini-grid">
+                {[
+                  ["Best bid", state.best_bid ? money(state.best_bid.price) : "-"],
+                  ["Bid size", bestBidSize == null ? "-" : `${fmt(bestBidSize, 4)} BTC`],
+                  ["Best ask", state.best_ask ? money(state.best_ask.price) : "-"],
+                  ["Ask size", bestAskSize == null ? "-" : `${fmt(bestAskSize, 4)} BTC`],
+                  ["Spread", topSpread == null ? "-" : money(topSpread, 2)],
+                  ["Spread bps", topSpreadBps == null ? "-" : `${fmt(topSpreadBps, 2)} bps`],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Trade Distribution">
+              <div className="mini-grid">
+                {[
+                  ["Last trade", lastTradePrice == null ? "-" : money(lastTradePrice)],
+                  ["VWAP", tapeVwap == null ? "-" : money(tapeVwap)],
+                  ["High", tapeHigh == null ? "-" : money(tapeHigh)],
+                  ["Low", tapeLow == null ? "-" : money(tapeLow)],
+                  ["Range", tapeRange == null ? "-" : money(tapeRange)],
+                  ["Messages", intFmt(state.runtime.messages_seen)],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
           </div>
         </div>
       </section>
@@ -607,6 +795,56 @@ function AppContent({
               }}
             />
           </div>
+          <div className="span-4">
+            <GlassPanel title="Quote Diagnostics">
+              <div className="mini-grid">
+                {quoteRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Portfolio Diagnostics">
+              <div className="mini-grid">
+                {[
+                  ["Cash", money(state.portfolio.cash)],
+                  ["Equity", money(state.portfolio.equity)],
+                  ["Exposure", money(state.portfolio.exposure_usd)],
+                  ["Avg entry", money(state.portfolio.avg_entry_price)],
+                  ["Realized", money(state.portfolio.realized_pnl)],
+                  ["Unrealized", money(state.portfolio.unrealized_pnl)],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Execution Pulse">
+              <div className="mini-grid">
+                {[
+                  ["Fill count", intFmt(state.strategy.fill_count)],
+                  ["Avg fill", money(state.strategy.avg_fill_notional)],
+                  ["Order size", `${fmt(state.strategy.config.order_size_btc, 4)} BTC`],
+                  ["Base spread", `${fmt(state.strategy.config.base_quote_spread_bps, 2)} bps`],
+                  ["Skew", `${fmt(state.strategy.config.position_skew_bps_per_btc, 2)} bps`],
+                  ["Quote width", quoteWidthBps == null ? "-" : `${fmt(quoteWidthBps, 2)} bps`],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
         </div>
       </section>
 
@@ -713,6 +951,56 @@ function AppContent({
               }}
             />
           </div>
+          <div className="span-4">
+            <GlassPanel title="Flow Metrics">
+              <div className="mini-grid">
+                {[
+                  ["Readiness", state.quant_lab.readiness],
+                  ["Window", intFmt(state.quant_lab.window_points)],
+                  ["Realized vol", `${fmt(state.quant_lab.realized_vol_bps, 2)} bps`],
+                  ["Momentum", `${fmt(state.quant_lab.momentum_bps, 2)} bps`],
+                  ["Flow", `${fmt(state.quant_lab.trade_flow_imbalance_btc, 4)} BTC`],
+                  ["Micro bias", `${fmt(state.quant_lab.micro_bias_bps, 2)} bps`],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Depth Metrics">
+              <div className="mini-grid">
+                {[
+                  ["Top5 imbalance", fmt(state.quant_lab.top5_depth_imbalance, 3)],
+                  ["Buy volume", `${fmt(buyVolume, 4)} BTC`],
+                  ["Sell volume", `${fmt(sellVolume, 4)} BTC`],
+                  ["VWAP", tapeVwap == null ? "-" : money(tapeVwap)],
+                  ["Spread state", state.quant_lab.spread_regimes[0]?.state ?? "-"],
+                  ["Top spread", topSpreadBps == null ? "-" : `${fmt(topSpreadBps, 2)} bps`],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Research Monitor">
+              <div className="mini-grid">
+                {state.quant_lab.research_presets.map((preset) => (
+                  <div className="mini-kpi" key={preset.name}>
+                    <span>{preset.name}</span>
+                    <strong>{fmt(preset.spread_bps, 1)} bps</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
         </div>
       </section>
 
@@ -815,6 +1103,56 @@ function AppContent({
                 <span className="badge">diagnostics</span>
               </div>
               <div className="empty">session diagnostics</div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Replay KPIs">
+              <div className="mini-grid">
+                {replayRows.map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Runtime Parity">
+              <div className="mini-grid">
+                {[
+                  ["Quote uptime", percent(state.backtest_lite.quote_uptime_pct, 1)],
+                  ["Fill count", intFmt(state.backtest_lite.fill_count)],
+                  ["Window", intFmt(state.backtest_lite.window_points)],
+                  ["Runtime trades", intFmt(state.runtime.trade_events)],
+                  ["Strategy fills", intFmt(state.strategy.fill_count)],
+                  ["Risk state", state.risk_status],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="span-4">
+            <GlassPanel title="Session State">
+              <div className="mini-grid">
+                {[
+                  ["Status", state.backtest_lite.status],
+                  ["Mode", state.backtest_lite.mode],
+                  ["Peak equity", money(state.backtest_lite.peak_equity_usd)],
+                  ["Drawdown", money(state.backtest_lite.max_drawdown_usd)],
+                  ["Volume", `${fmt(state.backtest_lite.fill_volume_btc, 4)} BTC`],
+                  ["Notional", money(state.backtest_lite.fill_notional_usd)],
+                ].map(([label, value]) => (
+                  <div className="mini-kpi" key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
             </GlassPanel>
           </div>
         </div>

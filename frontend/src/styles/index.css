@@ -343,6 +343,56 @@ button {
   line-height: 1.45;
 }
 
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mini-kpi {
+  min-height: 76px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 90%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 24px rgba(0, 0, 0, 0.14);
+}
+
+.mini-kpi span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.mini-kpi strong {
+  display: block;
+  margin-top: 10px;
+  font-size: 16px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.panel-fallback {
+  display: grid;
+  gap: 12px;
+}
+
+.panel-fallback strong {
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+
+.panel-fallback span {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .tab-panel {
   display: none;
 }
@@ -566,6 +616,10 @@ tr:hover td {
   .desk-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 960px) {
@@ -591,6 +645,10 @@ tr:hover td {
   }
 
   .desk-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-grid {
     grid-template-columns: 1fr;
   }
 }
