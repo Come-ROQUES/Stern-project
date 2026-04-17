@@ -1,5 +1,5 @@
 {
-  "name": "fractal-crypto-frontend",
+  "name": "stern-crypto-frontend",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.8.0",
     "plotly.js-dist-min": "^3.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-plotly.js": "^2.6.0"
+    "react-plotly.js": "^2.6.0",
+    "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
     "@types/plotly.js": "^2.35.3",
@@ -20,6 +23,9 @@
     "@types/react-dom": "^18.3.5",
     "@types/react-plotly.js": "^2.6.3",
     "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.7.3",
     "vite": "^6.1.0"
   }

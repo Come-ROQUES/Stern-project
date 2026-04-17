@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Data } from "plotly.js";
 
+import { CandlestickChart } from "./components/CandlestickChart";
 import { DataTable } from "./components/DataTable";
+import { DepthChart } from "./components/DepthChart";
 import { GlassPanel } from "./components/GlassPanel";
 import { MetricCard } from "./components/MetricCard";
 import { PlotCard } from "./components/PlotCard";
@@ -71,14 +73,6 @@ function statLines(
   );
 }
 
-function toContextHtml(state: ApiState): string {
-  return `
-    <div class="stat-line"><span class="label">Feed</span><span>${state.runtime.feed_state}</span></div>
-    <div class="stat-line"><span class="label">Runtime</span><span>${state.runtime.order_book_ready ? "book ready" : "warming"}</span></div>
-    <div class="stat-line"><span class="label">Quant</span><span>${state.quant_lab.readiness}</span></div>
-    <div class="stat-line"><span class="label">Risk</span><span>${state.risk_status}</span></div>
-  `;
-}
 
 function tradesFlowData(trades: PublicTrade[]): Data[] {
   const recent = trades.slice(0, 30).reverse();
@@ -493,11 +487,31 @@ function AppContent({
             </GlassPanel>
           </div>
 
-          <div className="span-6">
-            <PlotCard title="Mid Price Curve" data={overviewMidData} />
+          <div className="span-12">
+            <CandlestickChart
+              midHistory={state.mid_history}
+              fills={state.fills}
+              recentTrades={state.recent_trades}
+              midPrice={state.mid_price}
+              bestBid={state.best_bid?.price}
+              bestAsk={state.best_ask?.price}
+            />
           </div>
           <div className="span-6">
-            <PlotCard title="Equity Curve" data={overviewEquityData} />
+            <PlotCard
+              title="Equity Curve"
+              subtitle="Paper portfolio equity"
+              data={overviewEquityData}
+              legend={[{ label: 'Equity', color: '#00FF88' }]}
+            />
+          </div>
+          <div className="span-6">
+            <PlotCard
+              title="Mid Price"
+              subtitle="Real-time mid price"
+              data={overviewMidData}
+              legend={[{ label: 'Mid', color: '#2CE3FF' }]}
+            />
           </div>
           <div className="span-4">
             <GlassPanel title="Market Snapshot">
@@ -540,22 +554,21 @@ function AppContent({
 
       <section className={`tab-panel ${activeTab === "market" ? "active" : ""}`}>
         <div className="grid">
-          <div className="span-6">
+          <div className="span-7">
+            <DepthChart
+              bids={state.book.bids}
+              asks={state.book.asks}
+              midPrice={state.mid_price}
+            />
+          </div>
+          <div className="span-5">
             <GlassPanel title="Order Book">
               {bookRows.length > 0 ? (
                 <DataTable headers={["Side", "Price", "Size"]} rows={bookRows} />
               ) : (
                 <div className="panel-fallback">
                   <strong>Book warming</strong>
-                  <span>Trades are live, level2 depth still hydrating.</span>
-                  <div className="mini-grid">
-                    {pulseRows.map(([label, value]) => (
-                      <div className="mini-kpi" key={label}>
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </div>
-                    ))}
-                  </div>
+                  <span>Level2 depth hydrating...</span>
                 </div>
               )}
             </GlassPanel>
@@ -608,19 +621,27 @@ function AppContent({
           <div className="span-6">
             <PlotCard
               title="Depth Spread History"
+              subtitle="Multi-depth spread evolution"
               data={spreadData}
+              legend={Object.keys(state.spread_history).map((k, i) => ({
+                label: k,
+                color: ['#00FF88', '#2CE3FF', '#eab308', '#ef4444'][i % 4],
+              }))}
               layout={{
-                legend: {
-                  orientation: "h",
-                  x: 0,
-                  y: 1.12,
-                  font: { color: "#8a918a", size: 11 },
-                },
+                showlegend: false,
               }}
             />
           </div>
           <div className="span-6">
-            <PlotCard title="Trade Side Flow" data={tradesFlowData(state.recent_trades)} />
+            <PlotCard
+              title="Trade Side Flow"
+              subtitle="Buy/sell aggressor volume"
+              data={tradesFlowData(state.recent_trades)}
+              legend={[
+                { label: 'Buy', color: '#00FF88' },
+                { label: 'Sell', color: '#FF4D4D' },
+              ]}
+            />
           </div>
           <div className="span-4">
             <GlassPanel title="Tape Diagnostics">
@@ -778,20 +799,21 @@ function AppContent({
           <div className="span-6">
             <PlotCard
               title="P&L & Inventory Replay"
+              subtitle="Dual-axis strategy performance"
               data={strategyReplayData}
+              legend={[
+                { label: 'P&L', color: '#00FF88' },
+                { label: 'Equity', color: '#2CE3FF' },
+              ]}
               layout={{
                 yaxis2: {
                   overlaying: "y",
                   side: "right",
                   color: "#4a524a",
                   showgrid: false,
+                  gridcolor: 'rgba(148,163,184,0.04)',
                 },
-                legend: {
-                  orientation: "h",
-                  x: 0,
-                  y: 1.12,
-                  font: { color: "#8a918a", size: 11 },
-                },
+                showlegend: false,
               }}
             />
           </div>
@@ -916,22 +938,24 @@ function AppContent({
           <div className="span-6">
             <PlotCard
               title="Signal Regime Radar"
+              subtitle="Microstructure signal fingerprint"
               data={radarData}
+              height={340}
               layout={{
                 polar: {
                   bgcolor: "rgba(0,0,0,0)",
                   radialaxis: {
-                    gridcolor: "rgba(255,255,255,0.05)",
-                    linecolor: "rgba(255,255,255,0.05)",
+                    gridcolor: "rgba(148,163,184,0.08)",
+                    linecolor: "rgba(148,163,184,0.08)",
                     tickfont: { color: "#4a524a", size: 10 },
                   },
                   angularaxis: {
-                    gridcolor: "rgba(255,255,255,0.05)",
-                    linecolor: "rgba(255,255,255,0.05)",
-                    tickfont: { color: "#8a918a", size: 10 },
+                    gridcolor: "rgba(148,163,184,0.08)",
+                    linecolor: "rgba(148,163,184,0.08)",
+                    tickfont: { color: "#8a918a", size: 11 },
                   },
                 },
-                margin: { l: 20, r: 20, t: 10, b: 10 },
+                margin: { l: 30, r: 30, t: 16, b: 16 },
               }}
             />
           </div>
@@ -939,15 +963,15 @@ function AppContent({
           <div className="span-6">
             <PlotCard
               title="Preset Comparison"
+              subtitle="Research preset spread/skew"
               data={presetData}
+              legend={[
+                { label: 'Spread', color: '#2CE3FF' },
+                { label: 'Skew', color: '#00FF88' },
+              ]}
               layout={{
                 barmode: "group",
-                legend: {
-                  orientation: "h",
-                  x: 0,
-                  y: 1.12,
-                  font: { color: "#8a918a", size: 11 },
-                },
+                showlegend: false,
               }}
             />
           </div>
@@ -1038,6 +1062,7 @@ function AppContent({
           <div className="span-6">
             <PlotCard
               title="Equity Replay"
+              subtitle="Cumulative paper equity"
               data={[
                 {
                   x: state.backtest_lite.equity_curve.map((_, i) => i + 1),
@@ -1046,26 +1071,29 @@ function AppContent({
                   mode: "lines",
                   line: { color: "#00FF88", width: 2.4 },
                   fill: "tozeroy",
-                  fillcolor: "rgba(0,255,136,0.08)",
+                  fillcolor: "rgba(0,255,136,0.06)",
                   hovertemplate: "point %{x}<br>$%{y:,.2f}<extra>equity</extra>",
                 },
               ]}
+              legend={[{ label: 'Equity', color: '#00FF88' }]}
             />
           </div>
           <div className="span-6">
             <PlotCard
               title="P&L Replay"
+              subtitle="Per-period P&L attribution"
               data={[
                 {
                   x: state.backtest_lite.pnl_curve.map((_, i) => i + 1),
                   y: state.backtest_lite.pnl_curve,
                   type: "scatter",
                   mode: "lines+markers",
-                  marker: { color: "#2CE3FF", size: 5 },
+                  marker: { color: "#2CE3FF", size: 4, line: { color: '#0b1220', width: 1 } },
                   line: { color: "#2CE3FF", width: 2.2 },
                   hovertemplate: "point %{x}<br>$%{y:,.2f}<extra>P&L</extra>",
                 },
               ]}
+              legend={[{ label: 'P&L', color: '#2CE3FF' }]}
             />
           </div>
 
@@ -1201,19 +1229,15 @@ export function App(): JSX.Element {
     };
   }, []);
 
-  const contextHtml = useMemo(() => {
-    if (!state) {
-      return '<div class="empty">warming</div>';
-    }
-    return toContextHtml(state);
-  }, [state]);
-
   return (
     <div className="app-shell">
       <Sidebar
         activeTab={activeTab}
         onTabChange={(tab) => setActiveTab(tab as TabId)}
-        contextHtml={contextHtml}
+        feedState={state?.runtime.feed_state ?? 'warming'}
+        bookReady={state?.runtime.order_book_ready ?? false}
+        quantReadiness={state?.quant_lab.readiness ?? 'booting'}
+        riskStatus={state?.risk_status ?? 'booting'}
       />
       <main className="main">
         <Topbar

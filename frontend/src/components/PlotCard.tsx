@@ -1,66 +1,106 @@
-import { Suspense, lazy } from "react";
-import type { Data, Layout } from "plotly.js";
+import { Suspense, lazy } from 'react';
+import type { Data, Layout } from 'plotly.js';
+import { cn } from '../lib/utils';
 
-import { GlassPanel } from "./GlassPanel";
-
-const Plot = lazy(() => import("react-plotly.js"));
+const Plot = lazy(() => import('react-plotly.js'));
 
 type PlotCardProps = {
-  title: string;
-  data: Data[];
-  layout?: Partial<Layout>;
-  className?: string;
+    title: string;
+    subtitle?: string;
+    data: Data[];
+    layout?: Partial<Layout>;
+    height?: number;
+    className?: string;
+    legend?: { label: string; color: string }[];
 };
 
 const baseLayout: Partial<Layout> = {
-  paper_bgcolor: "rgba(0,0,0,0)",
-  plot_bgcolor: "rgba(0,0,0,0)",
-  margin: { l: 36, r: 16, t: 18, b: 32 },
-  font: {
-    family: "IBM Plex Sans, Inter, sans-serif",
-    color: "#8a918a",
-    size: 11,
-  },
-  xaxis: {
-    color: "#4a524a",
-    gridcolor: "rgba(255,255,255,0.04)",
-    zerolinecolor: "rgba(255,255,255,0.04)",
-  },
-  yaxis: {
-    color: "#4a524a",
-    gridcolor: "rgba(255,255,255,0.04)",
-    zerolinecolor: "rgba(255,255,255,0.04)",
-  },
-  legend: {
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    margin: { l: 48, r: 16, t: 12, b: 36 },
     font: {
-      color: "#8a918a",
-      size: 11,
+        family: 'IBM Plex Sans, Inter, sans-serif',
+        color: '#8a918a',
+        size: 11,
     },
-  },
+    xaxis: {
+        color: '#4a524a',
+        gridcolor: 'rgba(148,163,184,0.06)',
+        zerolinecolor: 'rgba(148,163,184,0.06)',
+        showspikes: true,
+        spikemode: 'across',
+        spikecolor: 'rgba(148,163,184,0.2)',
+        spikethickness: 1,
+        spikedash: 'dot',
+    },
+    yaxis: {
+        color: '#4a524a',
+        gridcolor: 'rgba(148,163,184,0.08)',
+        zerolinecolor: 'rgba(148,163,184,0.08)',
+        showspikes: true,
+        spikemode: 'across',
+        spikecolor: 'rgba(148,163,184,0.2)',
+        spikethickness: 1,
+        spikedash: 'dot',
+    },
+    legend: {
+        font: { color: '#8a918a', size: 11 },
+        bgcolor: 'transparent',
+    },
+    hovermode: 'x unified',
+    hoverlabel: {
+        bgcolor: 'rgba(8,14,24,0.95)',
+        bordercolor: 'rgba(148,163,184,0.25)',
+        font: { color: '#e2e8f0', size: 11 },
+    },
 };
 
 export function PlotCard({
-  title,
-  data,
-  layout,
-  className = "",
+    title,
+    subtitle,
+    data,
+    layout,
+    height = 320,
+    className,
+    legend,
 }: PlotCardProps) {
-  return (
-    <GlassPanel title={title} className={`plot-card ${className}`.trim()}>
-      <div className="plot-shell">
-        <Suspense fallback={<div className="plot-loading">Loading chart...</div>}>
-          <Plot
-            className="plot"
-            data={data}
-            layout={{ ...baseLayout, ...layout }}
-            config={{
-              responsive: true,
-              displayModeBar: false,
-            }}
-            useResizeHandler
-          />
-        </Suspense>
-      </div>
-    </GlassPanel>
-  );
+    return (
+        <div className={cn(
+            'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
+            'shadow-lg shadow-black/10 transition-all duration-200 hover:border-white/[0.12]',
+            className,
+        )}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div>
+                    <h3 className="text-sm font-medium text-white">{title}</h3>
+                    {subtitle && <span className="text-[10px] text-neutral-500">{subtitle}</span>}
+                </div>
+                {legend && legend.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        {legend.map(l => (
+                            <span key={l.label} className="inline-flex items-center gap-1 text-[10px] text-neutral-400">
+                                <span className="h-1.5 w-1.5 rounded-full" style={{ background: l.color }} />
+                                {l.label}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <div className="px-2">
+                <Suspense fallback={
+                    <div style={{ height }} className="flex items-center justify-center text-neutral-600 text-sm animate-pulse">
+                        Loading chart...
+                    </div>
+                }>
+                    <Plot
+                        data={data}
+                        layout={{ ...baseLayout, ...layout, height }}
+                        config={{ responsive: true, displayModeBar: false }}
+                        useResizeHandler
+                        style={{ width: '100%', height }}
+                    />
+                </Suspense>
+            </div>
+        </div>
+    );
 }
