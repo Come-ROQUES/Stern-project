@@ -181,8 +181,10 @@ export function DepthChart({ bids, asks, midPrice, className }: DepthChartProps)
 
     return (
         <div className={cn(
-            'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
+            'rounded-2xl border border-[rgba(0,255,136,0.06)] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
             'shadow-[0_18px_60px_rgba(0,0,0,0.35)]',
+            'transition-all duration-300 hover:border-[rgba(0,255,136,0.12)]',
+            'hover:shadow-[0_18px_60px_rgba(0,0,0,0.35),0_0_24px_rgba(0,255,136,0.03)]',
             className,
         )}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">

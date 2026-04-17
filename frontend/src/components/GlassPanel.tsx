@@ -10,9 +10,11 @@ type GlassPanelProps = {
 export function GlassPanel({ title, className, children }: GlassPanelProps) {
     return (
         <div className={cn(
-            'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl',
+            'rounded-2xl border border-[rgba(0,255,136,0.06)] bg-white/[0.02] backdrop-blur-xl',
             'shadow-lg shadow-black/10',
-            'transition-all duration-200 hover:border-white/[0.12]',
+            'transition-all duration-200',
+            'hover:border-[rgba(0,255,136,0.12)]',
+            'hover:shadow-[0_12px_30px_rgba(0,0,0,0.2),0_0_16px_rgba(0,255,136,0.02)]',
             className
         )}>
             {title && (
