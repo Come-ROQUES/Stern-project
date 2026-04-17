@@ -63,44 +63,45 @@ class MarketDataService:
                 await asyncio.sleep(2)
 
     async def _run_once(self) -> None:
-        async with websockets.connect(self._settings.ws_url, ping_interval=20) as ws:
-            subscribe_payload = {
-                "type": "subscribe",
-                "product_ids": [self._settings.product_id],
-                "channels": ["level2", "matches"],
-            }
-            await ws.send(json.dumps(subscribe_payload))
+        async with websockets.connect(
+            self._settings.ws_url,
+            ping_interval=20,
+            max_size=None,
+        ) as ws:
+            await ws.send(
+                json.dumps(
+                    {
+                        "type": "subscribe",
+                        "product_ids": [self._settings.product_id],
+                        "channel": "level2",
+                    }
+                )
+            )
+            await ws.send(
+                json.dumps(
+                    {
+                        "type": "subscribe",
+                        "product_ids": [self._settings.product_id],
+                        "channel": "market_trades",
+                    }
+                )
+            )
             async for raw_message in ws:
                 message = json.loads(raw_message)
                 await self._handle_message(message)
 
     async def _handle_message(self, message: dict[str, object]) -> None:
         msg_type = str(message.get("type", ""))
+        channel = str(message.get("channel", ""))
         self._message_count += 1
         async with self._lock:
-            if msg_type == "snapshot":
-                bids = message.get("bids", [])
-                asks = message.get("asks", [])
-                if isinstance(bids, list) and isinstance(asks, list):
-                    self.order_book.apply_snapshot(bids=bids, asks=asks)
-            elif msg_type == "l2update":
-                changes = message.get("changes", [])
-                if isinstance(changes, list):
-                    for side, price, size in changes:
-                        self.order_book.apply_l2_update(side=side, price=price, size=size)
-            elif msg_type == "match":
-                side = cast(Literal["buy", "sell"], str(message["side"]))
-                trade = PublicTrade(
-                    trade_id=_parse_optional_int(message.get("trade_id")),
-                    side=side,
-                    price=float(cast(str | float, message["price"])),
-                    size=float(cast(str | float, message["size"])),
-                    ts=_parse_ts(str(message["time"])),
-                )
-                self.trade_tape.appendleft(trade)
-                fill = self.market_maker.maybe_fill(trade)
-                if fill is not None:
-                    self.simulated_fills.appendleft(fill.model_dump(mode="json"))
+            if msg_type == "error":
+                logger.warning("coinbase subscription error: %s", message)
+                return
+            if channel == "l2_data":
+                self._handle_l2_message(message)
+            elif channel == "market_trades":
+                self._handle_market_trades_message(message)
 
             mid = self.order_book.mid_price()
             if mid is None:
@@ -109,6 +110,79 @@ class MarketDataService:
             spreads = compute_depth_spreads(self.order_book)
             self.spread_tracker.record(spreads)
             self._record_live_snapshots(mid=mid, quote_active=quote is not None)
+
+    def _handle_l2_message(self, message: dict[str, object]) -> None:
+        events = message.get("events", [])
+        if not isinstance(events, list):
+            return
+        bids: list[tuple[str, str]] = []
+        asks: list[tuple[str, str]] = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            updates = event.get("updates", [])
+            if not isinstance(updates, list):
+                continue
+            event_type = str(event.get("type", ""))
+            if event_type == "snapshot":
+                bids.clear()
+                asks.clear()
+                for update in updates:
+                    if not isinstance(update, dict):
+                        continue
+                    side = _normalize_book_side(str(update.get("side", "")))
+                    price = str(update.get("price_level", "0"))
+                    size = str(update.get("new_quantity", "0"))
+                    if side == "buy":
+                        bids.append((price, size))
+                    elif side == "sell":
+                        asks.append((price, size))
+                if bids or asks:
+                    self.order_book.apply_snapshot(bids=bids, asks=asks)
+            elif event_type == "update":
+                for update in updates:
+                    if not isinstance(update, dict):
+                        continue
+                    side = _normalize_book_side(str(update.get("side", "")))
+                    price = str(update.get("price_level", "0"))
+                    size = str(update.get("new_quantity", "0"))
+                    if side:
+                        self.order_book.apply_l2_update(
+                            side=side,
+                            price=price,
+                            size=size,
+                        )
+
+    def _handle_market_trades_message(self, message: dict[str, object]) -> None:
+        events = message.get("events", [])
+        if not isinstance(events, list):
+            return
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            trades = event.get("trades", [])
+            if not isinstance(trades, list):
+                continue
+            for raw_trade in reversed(trades):
+                if not isinstance(raw_trade, dict):
+                    continue
+                side = cast(
+                    Literal["buy", "sell"],
+                    str(raw_trade.get("side", "")).lower(),
+                )
+                if side not in {"buy", "sell"}:
+                    continue
+                trade = PublicTrade(
+                    trade_id=_parse_optional_int(raw_trade.get("trade_id")),
+                    side=side,
+                    price=float(cast(str | float, raw_trade["price"])),
+                    size=float(cast(str | float, raw_trade["size"])),
+                    ts=_parse_ts(str(raw_trade["time"])),
+                )
+                self.trade_tape.appendleft(trade)
+                fill = self.market_maker.maybe_fill(trade)
+                if fill is not None:
+                    self.simulated_fills.appendleft(fill.model_dump(mode="json"))
 
     async def state_snapshot(self) -> dict[str, object]:
         async with self._lock:
@@ -305,6 +379,15 @@ def _parse_optional_int(value: object) -> int | None:
     if value is None:
         return None
     return int(cast(str | int | float, value))
+
+
+def _normalize_book_side(value: str) -> Literal["buy", "sell"] | None:
+    lowered = value.lower()
+    if lowered == "bid":
+        return "buy"
+    if lowered in {"offer", "ask"}:
+        return "sell"
+    return None
 
 
 def _returns_bps(values: list[float]) -> list[float]:

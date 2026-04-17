@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8015
     product_id: str = "BTC-USD"
-    ws_url: str = "wss://ws-feed.exchange.coinbase.com"
+    ws_url: str = "wss://advanced-trade-ws.coinbase.com"
     initial_cash: float = 1_000_000.0
     max_notional_exposure: float = 1_000_000.0
     max_loss: float = 100_000.0
@@ -36,4 +36,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
