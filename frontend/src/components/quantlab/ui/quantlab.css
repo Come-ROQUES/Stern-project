@@ -1,0 +1,306 @@
+/* Quant Lab design system — liquid glass bento */
+.quantlab-shell {
+  --ql-bg: #040813;
+  --ql-radial-a: radial-gradient(circle at 18% 18%, rgba(80, 199, 255, 0.12), transparent 28%);
+  --ql-radial-b: radial-gradient(circle at 82% 12%, rgba(99, 114, 255, 0.1), transparent 24%);
+  --ql-radial-c: radial-gradient(circle at 68% 78%, rgba(53, 182, 255, 0.08), transparent 32%);
+  --ql-surface: rgba(255, 255, 255, 0.05);
+  --ql-glass: rgba(255, 255, 255, 0.06);
+  --ql-paper: #ffffff;
+  --ql-border: rgba(255, 255, 255, 0.08);
+  --ql-border-strong: rgba(255, 255, 255, 0.16);
+  --ql-paper-border: #e6e9f0;
+  --ql-shadow: 0 26px 120px rgba(0, 0, 0, 0.42);
+  --ql-paper-shadow: 0 24px 90px rgba(4, 6, 15, 0.16);
+  --ql-accent: #46d3ff;
+  --ql-text: #e7ecf7;
+  --ql-muted: #99a8c2;
+  --ql-strong: #c8d2e9;
+  --ql-success: #2de3a0;
+  --ql-warn: #f6c341;
+  --ql-danger: #f25f73;
+  --ql-radius-md: 16px;
+  --ql-radius-lg: 20px;
+  --ql-space-xs: 8px;
+  --ql-space-sm: 14px;
+  --ql-space-md: 20px;
+  --ql-space-lg: 28px;
+  background: var(--ql-radial-a), var(--ql-radial-b), var(--ql-radial-c),
+    linear-gradient(135deg, #050914, #03060f 60%);
+  color: var(--ql-text);
+  min-height: 100vh;
+  position: relative;
+  font-family: "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.quantlab-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, rgba(70, 211, 255, 0.08), transparent 24%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06), transparent 42%);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.quantlab-container {
+  position: relative;
+  z-index: 1;
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 28px clamp(20px, 2.4vw, 36px) 56px;
+}
+
+.quantlab-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(4, 8, 19, 0.9), rgba(4, 8, 19, 0.72));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin: -24px -16px 24px;
+  padding: 20px clamp(16px, 2vw, 22px);
+}
+
+.quantlab-header-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr auto;
+  gap: var(--ql-space-md);
+  align-items: center;
+}
+
+.quantlab-header-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ql-text);
+  letter-spacing: -0.01em;
+}
+
+.quantlab-header-subtitle {
+  font-size: 13px;
+  color: var(--ql-muted);
+}
+
+.quantlab-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ql-space-md);
+  align-items: center;
+  row-gap: var(--ql-space-sm);
+}
+
+.quantlab-actions {
+  display: flex;
+  gap: var(--ql-space-sm);
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.ql-glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--ql-border);
+  border-radius: var(--ql-radius-lg);
+  box-shadow: var(--ql-shadow);
+  backdrop-filter: blur(16px);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.ql-glass:hover {
+  border-color: var(--ql-border-strong);
+  transform: translateY(-1px);
+}
+
+.ql-paper {
+  background: var(--ql-paper);
+  color: #0f172a;
+  border-radius: var(--ql-radius-lg);
+  border: 1px solid var(--ql-paper-border);
+  box-shadow: var(--ql-paper-shadow);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.ql-paper:hover {
+  box-shadow: 0 32px 120px rgba(4, 6, 15, 0.2);
+  transform: translateY(-1px);
+}
+
+.ql-section-label {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ql-muted);
+}
+
+.ql-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: var(--ql-space-sm) 0;
+}
+
+.ql-icon-button {
+  border: 1px solid var(--ql-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ql-strong);
+  border-radius: 12px;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.ql-icon-button:hover {
+  border-color: rgba(70, 211, 255, 0.6);
+  color: #ffffff;
+  background: rgba(70, 211, 255, 0.08);
+}
+
+.ql-icon-button:active {
+  transform: translateY(1px);
+}
+
+.ql-icon-button.primary {
+  background: linear-gradient(135deg, #46d3ff, #4f9bff);
+  color: #021120;
+  border-color: transparent;
+  box-shadow: 0 18px 50px rgba(70, 211, 255, 0.35);
+}
+
+.ql-icon-button.ghost {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ql-segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--ql-border);
+  border-radius: 14px;
+}
+
+.ql-segmented button {
+  border: 0;
+  background: transparent;
+  color: var(--ql-muted);
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ql-segmented button.active {
+  background: rgba(70, 211, 255, 0.12);
+  color: #e9f6ff;
+  box-shadow: inset 0 0 0 1px rgba(70, 211, 255, 0.3);
+}
+
+.ql-kpi {
+  display: grid;
+  gap: 4px;
+  align-items: start;
+}
+
+.ql-kpi-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ql-muted);
+}
+
+.ql-kpi-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ql-strong);
+}
+
+.ql-kpi-hint {
+  font-size: 12px;
+  color: var(--ql-muted);
+}
+
+.ql-empty {
+  border: 1px dashed var(--ql-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ql-muted);
+  border-radius: var(--ql-radius-lg);
+  padding: 32px;
+  text-align: center;
+}
+
+.ql-empty strong {
+  color: var(--ql-strong);
+}
+
+.ql-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ql-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ql-table tbody tr:nth-child(odd) {
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.ql-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.ql-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--ql-border);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  color: var(--ql-strong);
+}
+
+.ql-skeleton-line {
+  height: 10px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.08));
+  animation: qlPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qlPulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+@media (max-width: 1024px) {
+  .quantlab-header-bar {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .quantlab-actions {
+    justify-content: flex-start;
+  }
+}
