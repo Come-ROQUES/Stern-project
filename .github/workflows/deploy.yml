@@ -66,6 +66,7 @@ jobs:
             .venv/bin/pip install --upgrade pip
             .venv/bin/pip install -e .
             if [ ! -f .env ]; then cp .env.example .env; fi
+            sed -i 's|^CRYPTO_MM_WS_URL=wss://ws-feed.exchange.coinbase.com$|CRYPTO_MM_WS_URL=wss://advanced-trade-ws.coinbase.com|' .env
             sudo systemctl restart crypto-mm
             rm -f /tmp/crypto-mm-health.json
             for i in 1 2 3 4 5; do
