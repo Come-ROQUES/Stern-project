@@ -11,6 +11,8 @@ const API_BASE = (() => {
     return "";
 })();
 
+const STERN_COMPAT = true;
+
 const RESEARCH_API_BASE = (() => {
     const envBase = (
         import.meta.env.VITE_RESEARCH_API_URL ||
@@ -467,6 +469,11 @@ async function fetchJsonCached<T>(url: string, ttlMs = 0): Promise<T> {
 let cachedPortfolioEpoch: number | null | undefined;
 let cachedPortfolioEpochTs = 0;
 async function getCurrentPortfolioEpoch(): Promise<number | null> {
+    if (STERN_COMPAT) {
+        cachedPortfolioEpoch = 1;
+        cachedPortfolioEpochTs = Date.now();
+        return 1;
+    }
     const now = Date.now();
     if (cachedPortfolioEpoch !== undefined && now - cachedPortfolioEpochTs < 5_000) {
         return cachedPortfolioEpoch;
@@ -1257,6 +1264,28 @@ export async function getDampingWaveMissedOpportunities(
     runId: string,
     clusterWindowS = 5,
 ): Promise<DampingWaveMissedOpportunitiesResponse> {
+    if (STERN_COMPAT) {
+        return {
+            summary: {
+                rejected_total: 0,
+                rejected_executable_count: 0,
+                rejected_unreliable_count: 0,
+                missed_pnl_raw_pips: 0,
+                missed_pnl_clustered_pips: 0,
+                avg_missed_pnl_pips: 0,
+                tp_after_decision_rate: 0,
+                avg_mfe_pips: 0,
+                avg_mae_pips: 0,
+                cluster_count: 0,
+                unspecified_rejection_count: 0,
+                cluster_method: "first_signal",
+                top_reasons: [],
+            },
+            reasons: [],
+            clusters: [],
+            signals: [],
+        };
+    }
     const url = buildUrl("/api/registry/signals/missed-opportunities", {
         run_id: runId,
         strategy_id: "damping_wave",
@@ -1276,6 +1305,22 @@ export async function getTradePerformanceFallback(
     strategyId: string | undefined,
     scope: Scope
 ): Promise<TradePerformanceResponse> {
+    if (STERN_COMPAT) {
+        return {
+            equity_curve: [],
+            trades: [],
+            distribution: { bins: [], counts: [] },
+            kpis: {
+                total_pnl: 0,
+                total_pnl_usd: 0,
+                max_drawdown: 0,
+                win_rate: 0,
+                profit_factor: 0,
+                sharpe_proxy: 0,
+                trade_count: 0,
+            },
+        };
+    }
     const { backendScope, from_date, to_date, useRunId } = scopeToDateRange(scope);
 
     // For RUN scope, run_id is required

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
+const STERN_COMPAT = true;
+
 export type BundleRunsState = {
   enabled: boolean;
   dwRunId: string | null;
@@ -84,10 +86,10 @@ function initBundleState() {
   initialized = true;
   const enabledStored = readStorage(STORAGE_KEYS.enabled);
   const enabled =
-    enabledStored == null ? true : enabledStored === "true";
+    enabledStored == null ? !STERN_COMPAT : enabledStored === "true";
   const dwRunId = readStorage(STORAGE_KEYS.dw);
-  const s2RunId = readStorage(STORAGE_KEYS.s2);
-  const tfRunId = readStorage(STORAGE_KEYS.tf);
+  const s2RunId = STERN_COMPAT ? null : readStorage(STORAGE_KEYS.s2);
+  const tfRunId = STERN_COMPAT ? null : readStorage(STORAGE_KEYS.tf);
   bundleState = normalizeBundleRunIds({
     enabled,
     dwRunId: dwRunId || null,

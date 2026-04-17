@@ -86,6 +86,49 @@ const API_BASE = (() => {
     return '';
 })();
 
+const STERN_COMPAT = true;
+const STERN_RUN_ID = 'stern-paper';
+
+type SternStateSnapshot = {
+    product_id?: string;
+    best_bid?: { price?: number | null } | null;
+    best_ask?: { price?: number | null } | null;
+    mid_price?: number | null;
+    recent_trades?: Array<{
+        ts?: string | null;
+        side?: string | null;
+        price?: number | null;
+        size?: number | null;
+        trade_id?: string | number | null;
+    }>;
+    fills?: Array<{
+        ts?: string | null;
+        side?: string | null;
+        price?: number | null;
+        size?: number | null;
+        reason?: string | null;
+        fill_id?: string | number | null;
+    }>;
+    mid_history?: Array<{
+        ts?: string | null;
+        mid_price?: number | null;
+    }>;
+    portfolio?: {
+        equity?: number | null;
+        realized_pnl?: number | null;
+        unrealized_pnl?: number | null;
+        position_btc?: number | null;
+    };
+    strategy?: {
+        fill_count?: number | null;
+    };
+    runtime?: {
+        uptime_s?: number | null;
+        last_trade_ts?: string | null;
+        feed_state?: string | null;
+    };
+};
+
 // =============================================================================
 // TYPES - Run Registry
 // =============================================================================
@@ -1695,6 +1738,632 @@ export function useShocks(
 
     return { shocks, loading, error, refresh, noRunId };
 }
+
+function sternFallbackState(): SternStateSnapshot {
+    return {
+        product_id: 'BTC-USD',
+        best_bid: { price: null },
+        best_ask: { price: null },
+        mid_price: null,
+        recent_trades: [],
+        fills: [],
+        mid_history: [],
+        portfolio: {
+            equity: 1_000_000,
+            realized_pnl: 0,
+            unrealized_pnl: 0,
+            position_btc: 0,
+        },
+        strategy: { fill_count: 0 },
+        runtime: {
+            uptime_s: 0,
+            last_trade_ts: null,
+            feed_state: 'warming',
+        },
+    };
+}
+
+async function sternFetchState(signal?: AbortSignal): Promise<SternStateSnapshot> {
+    if (!STERN_COMPAT) {
+        return sternFallbackState();
+    }
+    try {
+        return await fetchJson<SternStateSnapshot>(
+            '/api/state',
+            signal ? { signal } : undefined,
+        );
+    } catch {
+        return sternFallbackState();
+    }
+}
+
+function sternSymbol(state: SternStateSnapshot): string {
+    return state.product_id || 'BTC-USD';
+}
+
+function sternNowIso(state: SternStateSnapshot): string {
+    return (
+        state.runtime?.last_trade_ts ||
+        state.fills?.[0]?.ts ||
+        state.recent_trades?.[0]?.ts ||
+        state.mid_history?.[state.mid_history.length - 1]?.ts ||
+        new Date().toISOString()
+    );
+}
+
+function sternTotalPnl(state: SternStateSnapshot): number {
+    return (state.portfolio?.realized_pnl ?? 0) + (state.portfolio?.unrealized_pnl ?? 0);
+}
+
+function sternRun(state: SternStateSnapshot): Run {
+    const startTs = state.mid_history?.[0]?.ts || sternNowIso(state);
+    const updatedAt = sternNowIso(state);
+    return {
+        run_id: STERN_RUN_ID,
+        strategy: 'damping_wave',
+        cfg_hash: null,
+        start_ts: startTs,
+        end_ts: null,
+        status: 'running',
+        source: 'paper',
+        pnl_total: sternTotalPnl(state),
+        trades_count: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+        notes: 'Synthetic Stern run from /api/state',
+        created_at: startTs,
+        updated_at: updatedAt,
+    };
+}
+
+function sternSignals(state: SternStateSnapshot, limit = 200): Signal[] {
+    const symbol = sternSymbol(state);
+    const fills = state.fills ?? [];
+    if (fills.length > 0) {
+        return fills.slice(0, limit).map((fill, index) => ({
+            signal_id: `stern-fill-${fill.fill_id ?? index}`,
+            run_id: STERN_RUN_ID,
+            strategy: 'damping_wave',
+            symbol,
+            direction: (String(fill.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY'),
+            signal_type: 'ENTRY',
+            strength: null,
+            price_at_signal: fill.price ?? null,
+            timestamp: fill.ts || sternNowIso(state),
+            z_score: null,
+            anchor_price: fill.price ?? null,
+            volatility: null,
+            spread: null,
+            session: null,
+            regime: 'LIVE',
+            accepted: true,
+            rejection_reason: null,
+            shock_id: `stern-shock-${fill.fill_id ?? index}`,
+            shock_magnitude: null,
+            was_traded: true,
+            trade_id: `stern-trade-${fill.fill_id ?? index}`,
+            outcome: 'PENDING',
+            reason: fill.reason ?? 'fill',
+            config_snapshot: null,
+            created_at: fill.ts || sternNowIso(state),
+        }));
+    }
+
+    return (state.recent_trades ?? []).slice(0, limit).map((trade, index) => ({
+        signal_id: `stern-signal-${trade.trade_id ?? index}`,
+        run_id: STERN_RUN_ID,
+        strategy: 'damping_wave',
+        symbol,
+        direction: (String(trade.side || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY'),
+        signal_type: 'REJECTED',
+        strength: null,
+        price_at_signal: trade.price ?? null,
+        timestamp: trade.ts || sternNowIso(state),
+        z_score: null,
+        anchor_price: trade.price ?? null,
+        volatility: null,
+        spread: null,
+        session: null,
+        regime: 'LIVE',
+        accepted: false,
+        rejection_reason: 'market_observation',
+        shock_id: `stern-shock-${trade.trade_id ?? index}`,
+        shock_magnitude: null,
+        was_traded: false,
+        trade_id: null,
+        outcome: 'SKIPPED',
+        reason: 'market_observation',
+        config_snapshot: null,
+        created_at: trade.ts || sternNowIso(state),
+    }));
+}
+
+function sternShocks(state: SternStateSnapshot, limit = 200): Shock[] {
+    const symbol = sternSymbol(state);
+    const bid = state.best_bid?.price ?? null;
+    const ask = state.best_ask?.price ?? null;
+    return (state.recent_trades ?? []).slice(0, limit).map((trade, index) => {
+        const price = trade.price ?? state.mid_price ?? null;
+        return {
+            shock_id: `stern-shock-${trade.trade_id ?? index}`,
+            run_id: STERN_RUN_ID,
+            symbol,
+            timestamp: trade.ts || sternNowIso(state),
+            direction: String(trade.side || 'BUY').toUpperCase() === 'SELL' ? 'DOWN' : 'UP',
+            magnitude_pips: null,
+            magnitude_pct: null,
+            duration_ms: null,
+            shock_type: 'trade_print',
+            z_score: null,
+            volatility: null,
+            session: null,
+            accepted: true,
+            price_before: state.mid_price ?? null,
+            price_after: price,
+            price_high: price,
+            price_low: price,
+            spread_at_shock:
+                bid != null && ask != null && state.mid_price
+                    ? ((ask - bid) / state.mid_price) * 10_000
+                    : null,
+            volume_spike: false,
+            volatility_regime: 'MEDIUM',
+            detector_version: 'stern_compat',
+            detection_params: null,
+            was_traded: false,
+            signal_id: null,
+            trade_outcome: null,
+            trajectory_json: null,
+            created_at: trade.ts || sternNowIso(state),
+        };
+    });
+}
+
+function sternTrades(state: SternStateSnapshot, limit = 200): CanonicalTrade[] {
+    const symbol = sternSymbol(state);
+    return (state.fills ?? []).slice(0, limit).map((fill, index) => ({
+        canonical_id: index + 1,
+        trade_id: `stern-trade-${fill.fill_id ?? index}`,
+        signal_id: `stern-fill-${fill.fill_id ?? index}`,
+        run_id: STERN_RUN_ID,
+        strategy_id: 'damping_wave',
+        symbol,
+        side: String(fill.side || 'BUY').toUpperCase(),
+        qty: fill.size ?? null,
+        entry_price: fill.price ?? null,
+        exit_price: null,
+        entry_time: fill.ts || sternNowIso(state),
+        exit_time: fill.ts || sternNowIso(state),
+        status: 'OPEN',
+        pnl: null,
+        source_db: 'stern_state',
+        pnl_pips: null,
+        pnl_net_eur: null,
+        pnl_net_pips: null,
+        pnl_gross_eur: null,
+        pnl_net_usd: null,
+        pnl_gross_usd: null,
+        commission_total_eur: null,
+        commission_total_usd: null,
+        commission_total_usd_reported: null,
+        commission_total_usd_economic: null,
+        commission_model: 'stern_state',
+        portfolio_epoch: 1,
+    }));
+}
+
+function sternSignalStats(state: SternStateSnapshot): SignalStats {
+    const signals = sternSignals(state, 500);
+    const accepted = signals.filter((signal) => signal.accepted).length;
+    const traded = signals.filter((signal) => signal.was_traded).length;
+    return {
+        total_signals: signals.length,
+        accepted_signals: accepted,
+        traded_signals: traded,
+        profitable_signals: 0,
+        conversion_rate: signals.length ? traded / signals.length : 0,
+        win_rate: 0,
+        by_type: signals.reduce<Record<string, number>>((acc, signal) => {
+            acc[signal.signal_type] = (acc[signal.signal_type] ?? 0) + 1;
+            return acc;
+        }, {}),
+        by_rejection_reason: signals.reduce<Record<string, number>>((acc, signal) => {
+            if (signal.rejection_reason) {
+                acc[signal.rejection_reason] = (acc[signal.rejection_reason] ?? 0) + 1;
+            }
+            return acc;
+        }, {}),
+        by_stage: { runtime: signals.length },
+    };
+}
+
+function sternShockStats(state: SternStateSnapshot): ShockStats {
+    const shocks = sternShocks(state, 500);
+    return {
+        total_shocks: shocks.length,
+        traded_shocks: 0,
+        avg_magnitude_pips: 0,
+        conversion_rate: 0,
+        by_direction: shocks.reduce<Record<string, number>>((acc, shock) => {
+            const key = shock.direction ?? 'UNKNOWN';
+            acc[key] = (acc[key] ?? 0) + 1;
+            return acc;
+        }, {}),
+        by_session: shocks.reduce<Record<string, number>>((acc, shock) => {
+            const key = shock.session ?? 'UNKNOWN';
+            acc[key] = (acc[key] ?? 0) + 1;
+            return acc;
+        }, {}),
+    };
+}
+
+function sternPortfolioSummary(state: SternStateSnapshot): PortfolioSummaryResponse {
+    const equity = state.portfolio?.equity ?? 1_000_000;
+    const totalPnl = sternTotalPnl(state);
+    return {
+        current_epoch: 1,
+        sim_equity_usd: equity,
+        equity_usd: equity,
+        pnl_epoch_usd: totalPnl,
+        pnl_7d_usd: totalPnl,
+        pnl_30d_usd: totalPnl,
+        trades_7d: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+        trades_30d: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+        epoch_started_at: state.mid_history?.[0]?.ts ?? null,
+        _meta: {
+            db_exists: false,
+            generated_at_utc: sternNowIso(state),
+        },
+    };
+}
+
+function sternApplyCompat(): void {
+    if (!STERN_COMPAT) {
+        return;
+    }
+
+    Object.assign(canonicalApi, {
+        getPortfolioEpoch: async (): Promise<PortfolioEpochResponse> => {
+            const state = await sternFetchState();
+            return {
+                current_epoch: 1,
+                sim_equity_usd: state.portfolio?.equity ?? 1_000_000,
+                trades_in_epoch: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+                pnl_epoch_usd: sternTotalPnl(state),
+                equity_usd: state.portfolio?.equity ?? 1_000_000,
+                epoch_started_at: state.mid_history?.[0]?.ts ?? null,
+                _meta: { db_exists: false },
+            };
+        },
+        getPortfolioSummary: async (): Promise<PortfolioSummaryResponse> => {
+            return sternPortfolioSummary(await sternFetchState());
+        },
+        getPortfolioTrades: async (params?: {
+            limit?: number;
+        }): Promise<CanonicalTradesResponse> => {
+            const state = await sternFetchState();
+            const trades = sternTrades(state, params?.limit ?? 200);
+            return {
+                trades,
+                count: trades.length,
+                _meta: {
+                    commission_view_used: 'reported',
+                    portfolio_epoch: 1,
+                    epoch_started_at: state.mid_history?.[0]?.ts ?? null,
+                },
+            };
+        },
+        listPortfolioEpochs: async (): Promise<EpochListResponse> => {
+            const state = await sternFetchState();
+            return {
+                epochs: [
+                    {
+                        epoch: 1,
+                        trade_count: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+                        closed_count: 0,
+                        first_trade: state.fills?.[state.fills.length - 1]?.ts ?? null,
+                        last_trade: state.fills?.[0]?.ts ?? null,
+                        pnl_usd: sternTotalPnl(state),
+                        is_current: true,
+                    },
+                ],
+                current_epoch: 1,
+            };
+        },
+        advancePortfolioEpoch: async (): Promise<AdvanceEpochResponse> => ({
+            previous_epoch: 1,
+            new_epoch: 1,
+            advanced_at: new Date().toISOString(),
+        }),
+        listRuns: async (params?: {
+            strategy?: string;
+            status?: 'running' | 'closed' | 'aborted';
+            limit?: number;
+        }): Promise<RunsListResponse> => {
+            const state = await sternFetchState();
+            const run = sternRun(state);
+            const runs =
+                params?.strategy && params.strategy !== 'damping_wave'
+                    ? []
+                    : [run];
+            return {
+                runs: runs.slice(0, params?.limit ?? runs.length),
+                count: runs.length,
+            };
+        },
+        getActiveRun: async (strategy?: string): Promise<ActiveRunResponse> => {
+            if (strategy && strategy !== 'damping_wave') {
+                return { active: null };
+            }
+            return { active: sternRun(await sternFetchState()) };
+        },
+        getRun: async (runId: string): Promise<Run> => {
+            if (runId !== STERN_RUN_ID) {
+                throw new ApiHttpError(404, 'run not found', 'Not Found');
+            }
+            return sternRun(await sternFetchState());
+        },
+        resolveRunScope: async (params: {
+            strategyId: string;
+            scope: RunResolveScope;
+            date?: string;
+        }): Promise<RunResolveResponse> => {
+            const state = await sternFetchState();
+            const targetDate = resolveScopeDate(params.scope, params.date);
+            if (params.strategyId !== 'damping_wave') {
+                return {
+                    resolved: false,
+                    run_id: null,
+                    strategy_id: params.strategyId,
+                    strategy_version: null,
+                    trade_date: targetDate,
+                    root_dir: null,
+                    available_dbs: [],
+                    data_origin: 'stern_state',
+                    scope: params.scope,
+                    target_date: targetDate,
+                };
+            }
+            return {
+                resolved: true,
+                run_id: STERN_RUN_ID,
+                strategy_id: 'damping_wave',
+                strategy_version: null,
+                trade_date: targetDate,
+                root_dir: null,
+                available_dbs: ['state'],
+                data_origin: 'stern_state',
+                scope: params.scope,
+                target_date: targetDate,
+                status: 'running',
+                source: 'paper',
+                start_ts: state.mid_history?.[0]?.ts ?? sternNowIso(state),
+                end_ts: null,
+            };
+        },
+        listSignals: async (
+            runId: string,
+            params?: { limit?: number; accepted?: boolean; order?: 'asc' | 'desc' },
+        ): Promise<SignalsListResponse> => {
+            requireRunId(runId, 'listSignals');
+            if (runId !== STERN_RUN_ID) {
+                return { signals: [], count: 0 };
+            }
+            const state = await sternFetchState();
+            let signals = sternSignals(state, params?.limit ?? 200);
+            if (params?.accepted !== undefined) {
+                signals = signals.filter((signal) => signal.accepted === params.accepted);
+            }
+            if (params?.order === 'asc') {
+                signals = [...signals].reverse();
+            }
+            return { signals, count: signals.length };
+        },
+        listSignalsScoped: async (params: {
+            scope: SignalScope;
+            runId: string;
+            strategyId: string;
+            fromDate?: string;
+            toDate?: string;
+            limit?: number;
+        }): Promise<ScopedSignalsResponse> => {
+            const signals = (await canonicalApi.listSignals(params.runId, {
+                limit: params.limit,
+            })).signals.map((signal) => ({
+                timestamp: signal.timestamp,
+                symbol: signal.symbol,
+                direction: signal.direction,
+                signal_type: signal.signal_type,
+                z_score: signal.z_score,
+                anchor_price: signal.anchor_price,
+                volatility: signal.volatility,
+                spread: signal.spread,
+                session: signal.session,
+                regime: signal.regime,
+                accepted: signal.accepted,
+                rejection_reason: signal.rejection_reason,
+                run_id: signal.run_id,
+                signal_id: signal.signal_id,
+                trade_id: signal.trade_id,
+                was_traded: signal.was_traded,
+                portfolio_epoch: 1,
+            }));
+            return {
+                signals,
+                _meta: {
+                    run_id: params.runId,
+                    scope: params.scope,
+                    from_date: params.fromDate,
+                    to_date: params.toDate,
+                    count: signals.length,
+                    cross_run: false,
+                    portfolio_epoch: 1,
+                    epoch_started_at: null,
+                },
+            };
+        },
+        getSignalStats: async (runId: string): Promise<SignalStats> => {
+            requireRunId(runId, 'getSignalStats');
+            if (runId !== STERN_RUN_ID) {
+                return sternSignalStats(sternFallbackState());
+            }
+            return sternSignalStats(await sternFetchState());
+        },
+        getSignal: async (signalId: string): Promise<Signal> => {
+            const state = await sternFetchState();
+            const signal = sternSignals(state, 500).find((entry) => entry.signal_id === signalId);
+            if (!signal) {
+                throw new ApiHttpError(404, 'signal not found', 'Not Found');
+            }
+            return signal;
+        },
+        listShocks: async (
+            runId: string,
+            params?: { limit?: number; order?: 'asc' | 'desc' },
+        ): Promise<ShocksListResponse> => {
+            requireRunId(runId, 'listShocks');
+            if (runId !== STERN_RUN_ID) {
+                return { shocks: [], count: 0 };
+            }
+            const state = await sternFetchState();
+            let shocks = sternShocks(state, params?.limit ?? 200);
+            if (params?.order === 'asc') {
+                shocks = [...shocks].reverse();
+            }
+            return { shocks, count: shocks.length };
+        },
+        listShocksScoped: async (params: {
+            scope: ShockScope;
+            runId: string;
+            strategyId: string;
+            fromDate?: string;
+            toDate?: string;
+            limit?: number;
+        }): Promise<ScopedShocksResponse> => {
+            const shocks = (await canonicalApi.listShocks(params.runId, {
+                limit: params.limit,
+            })).shocks.map((shock) => ({
+                shock_id: shock.shock_id,
+                run_id: shock.run_id,
+                symbol: shock.symbol,
+                timestamp: shock.timestamp,
+                direction: shock.direction,
+                magnitude_pips: shock.magnitude_pips,
+                magnitude_pct: shock.magnitude_pct,
+                duration_ms: shock.duration_ms,
+                price_before: shock.price_before,
+                price_after: shock.price_after,
+                price_high: shock.price_high,
+                price_low: shock.price_low,
+                spread_at_shock: shock.spread_at_shock,
+                volume_spike: shock.volume_spike,
+                volatility_regime: shock.volatility_regime,
+                detector_version: shock.detector_version,
+                detection_params: shock.detection_params,
+                was_traded: shock.was_traded,
+                signal_id: shock.signal_id,
+                trade_outcome: shock.trade_outcome,
+                trajectory_json: shock.trajectory_json,
+                portfolio_epoch: 1,
+            }));
+            return {
+                shocks,
+                _meta: {
+                    run_id: params.runId,
+                    scope: params.scope,
+                    from_date: params.fromDate,
+                    to_date: params.toDate,
+                    count: shocks.length,
+                    cross_run: false,
+                    portfolio_epoch: 1,
+                    epoch_started_at: null,
+                },
+            };
+        },
+        getShockStats: async (runId: string): Promise<ShockStats> => {
+            requireRunId(runId, 'getShockStats');
+            if (runId !== STERN_RUN_ID) {
+                return sternShockStats(sternFallbackState());
+            }
+            return sternShockStats(await sternFetchState());
+        },
+        getShock: async (shockId: string): Promise<Shock> => {
+            const state = await sternFetchState();
+            const shock = sternShocks(state, 500).find((entry) => entry.shock_id === shockId);
+            if (!shock) {
+                throw new ApiHttpError(404, 'shock not found', 'Not Found');
+            }
+            return shock;
+        },
+        getKPIs: async (runId: string): Promise<CanonicalKPIs> => {
+            requireRunId(runId, 'getKPIs');
+            const state = await sternFetchState();
+            return {
+                pnl_total: sternTotalPnl(state),
+                pnl_today: sternTotalPnl(state),
+                trades_count: state.strategy?.fill_count ?? state.fills?.length ?? 0,
+                linked_signals_count: sternSignals(state, 500).filter((signal) => signal.was_traded).length,
+                win_rate: 0,
+                last_sync: sternNowIso(state),
+                db_exists: true,
+            };
+        },
+        getTrades: async (
+            runId: string,
+            limit = 50,
+            options?: { signal?: AbortSignal },
+        ): Promise<CanonicalTradesResponse> => {
+            requireRunId(runId, 'getTrades');
+            if (runId !== STERN_RUN_ID) {
+                return { trades: [], count: 0 };
+            }
+            const state = await sternFetchState(options?.signal);
+            const trades = sternTrades(state, limit);
+            return {
+                trades,
+                count: trades.length,
+                _meta: {
+                    commission_view_used: 'reported',
+                    portfolio_epoch: 1,
+                    epoch_started_at: state.mid_history?.[0]?.ts ?? null,
+                },
+            };
+        },
+        getTradesByDate: async (params: {
+            runId: string;
+            strategyId: string;
+            scope?: TradeScope;
+            fromDate?: string;
+            toDate?: string;
+            limit?: number;
+        }): Promise<CanonicalTradesResponse> => {
+            return canonicalApi.getTrades(params.runId, params.limit ?? 200);
+        },
+        getTradesScoped: async (params: {
+            runId: string;
+            strategyId: string;
+            scope: 'TODAY' | '7D' | '30D';
+            limit?: number;
+        }): Promise<CanonicalTradesResponse> => {
+            return canonicalApi.getTrades(params.runId, params.limit ?? 200);
+        },
+        syncTrades: async (): Promise<{ status: string; synced: number }> => ({
+            status: 'unsupported_in_stern',
+            synced: 0,
+        }),
+        getRunWindow: async (runId: string): Promise<{ start: string; end: string } | null> => {
+            requireRunId(runId, 'getRunWindow');
+            if (runId !== STERN_RUN_ID) {
+                return null;
+            }
+            const state = await sternFetchState();
+            const points = state.mid_history ?? [];
+            const start = points[0]?.ts;
+            const end = points[points.length - 1]?.ts ?? sternNowIso(state);
+            return start ? { start, end } : null;
+        },
+    });
+}
+
+sternApplyCompat();
 
 export default canonicalApi;
 

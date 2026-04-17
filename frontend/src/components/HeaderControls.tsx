@@ -62,10 +62,7 @@ export function FractalModeProvider({ children }: { children: React.ReactNode })
 
     const [appMode, setAppModeState] = useState<AppMode>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_APP_MODE);
-        if (stored === 'quant' || stored === 'terminal' || stored === 'backtest') return stored;
-        const hash = typeof window !== 'undefined' ? window.location.hash : '';
-        if (hash.startsWith('#/quant/')) return 'quant';
-        if (hash.startsWith('#bt-')) return 'backtest';
+        if (stored === 'terminal') return stored;
         return 'terminal';
     });
 
@@ -90,12 +87,13 @@ export function FractalModeProvider({ children }: { children: React.ReactNode })
     }, []);
 
     const setAppMode = useCallback((newMode: AppMode) => {
+        const normalizedMode: AppMode = newMode === 'terminal' ? 'terminal' : 'terminal';
         setAppModeState((prev) => {
-            if (prev === newMode) {
+            if (prev === normalizedMode) {
                 return prev;
             }
-            localStorage.setItem(STORAGE_KEY_APP_MODE, newMode);
-            return newMode;
+            localStorage.setItem(STORAGE_KEY_APP_MODE, normalizedMode);
+            return normalizedMode;
         });
     }, []);
 
@@ -229,7 +227,7 @@ function AppModeSwitch({
     value: AppMode;
     onChange: (mode: AppMode) => void;
 }) {
-    const options: AppMode[] = ['terminal', 'quant', 'backtest'];
+    const options: AppMode[] = ['terminal'];
     return (
         <div className="flex overflow-hidden rounded-lg border border-white/[0.10] bg-white/[0.04]">
             {options.map((opt) => (
