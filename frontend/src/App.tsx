@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Data } from "plotly.js";
 
 import { DataTable } from "./components/DataTable";
@@ -69,15 +69,6 @@ function statLines(
       ))}
     </>
   );
-}
-
-function toContextHtml(state: ApiState): string {
-  return `
-    <div class="stat-line"><span class="label">Feed</span><span>${state.runtime.feed_state}</span></div>
-    <div class="stat-line"><span class="label">Runtime</span><span>${state.runtime.order_book_ready ? "book ready" : "warming"}</span></div>
-    <div class="stat-line"><span class="label">Quant</span><span>${state.quant_lab.readiness}</span></div>
-    <div class="stat-line"><span class="label">Risk</span><span>${state.risk_status}</span></div>
-  `;
 }
 
 function tradesFlowData(trades: PublicTrade[]): Data[] {
@@ -368,33 +359,72 @@ function AppContent({
     <div className="tab-panels">
       <section className="desk-strip">
         <div className="strip-card">
-          <strong>Runtime Control</strong>
-          <span>
-            Feed {state.runtime.feed_state}, carnet{" "}
-            {state.runtime.order_book_ready ? "hydrate" : "en chauffe"} et
-            uptime {intFmt(state.runtime.uptime_s)} s.
-          </span>
+          <div className="strip-title">Runtime Control</div>
+          <div className="strip-grid">
+            <div>
+              <span>feed</span>
+              <strong>{state.runtime.feed_state}</strong>
+            </div>
+            <div>
+              <span>book</span>
+              <strong>{state.runtime.order_book_ready ? "ready" : "warming"}</strong>
+            </div>
+            <div>
+              <span>uptime</span>
+              <strong>{intFmt(state.runtime.uptime_s)} s</strong>
+            </div>
+          </div>
         </div>
         <div className="strip-card">
-          <strong>Inventory Lane</strong>
-          <span>
-            Position {fmt(state.portfolio.position_btc, 4)} BTC, exposition{" "}
-            {money(state.portfolio.exposure_usd)} et skew dynamique actif.
-          </span>
+          <div className="strip-title">Inventory Lane</div>
+          <div className="strip-grid">
+            <div>
+              <span>position</span>
+              <strong>{fmt(state.portfolio.position_btc, 4)} BTC</strong>
+            </div>
+            <div>
+              <span>exposure</span>
+              <strong>{money(state.portfolio.exposure_usd)}</strong>
+            </div>
+            <div>
+              <span>avg entry</span>
+              <strong>{money(state.portfolio.avg_entry_price)}</strong>
+            </div>
+          </div>
         </div>
         <div className="strip-card">
-          <strong>Quant Research</strong>
-          <span>
-            Regimes spreads, flow imbalance et micro-bias pour une lecture type
-            lab simplifiee.
-          </span>
+          <div className="strip-title">Quant Research</div>
+          <div className="strip-grid">
+            <div>
+              <span>vol</span>
+              <strong>{fmt(state.quant_lab.realized_vol_bps, 2)} bps</strong>
+            </div>
+            <div>
+              <span>flow</span>
+              <strong>{fmt(state.quant_lab.trade_flow_imbalance_btc, 4)} BTC</strong>
+            </div>
+            <div>
+              <span>bias</span>
+              <strong>{fmt(state.quant_lab.micro_bias_bps, 2)} bps</strong>
+            </div>
+          </div>
         </div>
         <div className="strip-card">
-          <strong>Paper Replay</strong>
-          <span>
-            Equity, P&amp;L et diagnostics de session pour une lane backtest
-            orientee entretien.
-          </span>
+          <div className="strip-title">Paper Replay</div>
+          <div className="strip-grid">
+            <div>
+              <span>equity</span>
+              <strong>{money(state.portfolio.equity)}</strong>
+            </div>
+            <div>
+              <span>p&amp;l</span>
+              <strong>{money(state.backtest_lite.total_pnl_usd)}</strong>
+            </div>
+            <div>
+              <span>return</span>
+              <strong>{percent(state.backtest_lite.paper_return_pct, 3)}</strong>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1201,26 +1231,17 @@ export function App(): JSX.Element {
     };
   }, []);
 
-  const contextHtml = useMemo(() => {
-    if (!state) {
-      return '<div class="empty">warming</div>';
-    }
-    return toContextHtml(state);
-  }, [state]);
-
   return (
     <div className="app-shell">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={(tab) => setActiveTab(tab as TabId)}
-        contextHtml={contextHtml}
-      />
+      <Sidebar activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as TabId)} />
       <main className="main">
         <Topbar
           feed={`feed ${state?.runtime.feed_state ?? "warming"}`}
           risk={`risk ${state?.risk_status ?? "booting"}`}
+          quant={`quant ${state?.quant_lab.readiness ?? "warming"}`}
           product={state?.product_id ?? "BTC-USD"}
           activeTab={activeTab}
+          messagesSeen={intFmt(state?.runtime.messages_seen)}
         />
         {error ? (
           <GlassPanel title="Runtime Error">
