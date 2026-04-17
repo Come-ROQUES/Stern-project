@@ -14,11 +14,47 @@ type OhlcBar = {
     volume: number;
 };
 
+function trimRecentContinuousWindow(history: HistoryPoint[]): HistoryPoint[] {
+    if (history.length <= 24) return history;
+
+    const points = history
+        .map((point) => ({
+            ...point,
+            tsMs: new Date(point.ts).getTime(),
+        }))
+        .filter((point) => Number.isFinite(point.tsMs))
+        .sort((a, b) => a.tsMs - b.tsMs);
+
+    if (points.length <= 24) return points.map(({ ts, mid_price }) => ({ ts, mid_price }));
+
+    const deltas: number[] = [];
+    for (let index = 1; index < points.length; index += 1) {
+        deltas.push(points[index].tsMs - points[index - 1].tsMs);
+    }
+
+    const positiveDeltas = deltas.filter((delta) => delta > 0).sort((a, b) => a - b);
+    const medianDelta =
+        positiveDeltas.length > 0
+            ? positiveDeltas[Math.floor(positiveDeltas.length / 2)]
+            : 1000;
+    const gapThreshold = Math.max(20_000, medianDelta * 12);
+
+    let segmentStart = 0;
+    for (let index = 1; index < points.length; index += 1) {
+        if (points[index].tsMs - points[index - 1].tsMs > gapThreshold) {
+            segmentStart = index;
+        }
+    }
+
+    const trimmed = points.slice(Math.max(segmentStart, points.length - 160));
+    return trimmed.map(({ ts, mid_price }) => ({ ts, mid_price }));
+}
+
 function buildOhlcFromMid(history: HistoryPoint[]): OhlcBar[] {
     if (history.length < 6) return [];
 
     // Time-based aggregation: parse timestamps and bucket into ~30-50 bars
-    const points = history.map(p => ({
+    const points = trimRecentContinuousWindow(history).map(p => ({
         ts: new Date(p.ts).getTime(),
         price: p.mid_price,
         raw: p.ts,
@@ -96,14 +132,26 @@ export function CandlestickChart({
 }: CandlestickChartProps) {
     const bars = useMemo(() => buildOhlcFromMid(midHistory), [midHistory]);
 
-    const { data, shapes, priceRange } = useMemo(() => {
-        if (bars.length === 0) return { data: [] as Data[], shapes: [] as Partial<Shape>[], priceRange: null };
+    const { data, shapes, priceRange, xRange } = useMemo(() => {
+        if (bars.length === 0) {
+            return {
+                data: [] as Data[],
+                shapes: [] as Partial<Shape>[],
+                priceRange: null,
+                xRange: null as [string, string] | null,
+            };
+        }
 
         const timestamps = bars.map(b => b.ts);
         const allPrices = bars.flatMap(b => [b.high, b.low]);
         const minPrice = Math.min(...allPrices);
         const maxPrice = Math.max(...allPrices);
         const pad = (maxPrice - minPrice) * 0.08 || maxPrice * 0.001;
+        const firstBarTs = new Date(timestamps[0]).getTime();
+        const lastBarTs = new Date(timestamps[timestamps.length - 1]).getTime();
+        const xPadMs = Math.max(15_000, Math.floor((lastBarTs - firstBarTs || 60_000) * 0.05));
+        const xMin = new Date(firstBarTs - xPadMs).toISOString();
+        const xMax = new Date(lastBarTs + xPadMs).toISOString();
 
         // Candlestick trace
         const candle: Data = {
@@ -182,23 +230,32 @@ export function CandlestickChart({
         };
 
         // Fill markers
-        const fillTrace: Data | null = fills.length > 0 ? {
-            x: fills.map(f => f.ts),
-            y: fills.map(f => f.price),
+        const visibleFills = fills.filter((fill) => {
+            const ts = new Date(fill.ts).getTime();
+            return Number.isFinite(ts) && ts >= firstBarTs - xPadMs && ts <= lastBarTs + xPadMs;
+        });
+        const fillTrace: Data | null = visibleFills.length > 0 ? {
+            x: visibleFills.map(f => f.ts),
+            y: visibleFills.map(f => f.price),
             type: 'scattergl', mode: 'markers',
             marker: {
-                size: fills.map(() => 12),
-                symbol: fills.map(f => f.side === 'buy' ? 'triangle-up' : 'triangle-down'),
-                color: fills.map(f => f.side === 'buy' ? '#00FF88' : '#FF4D4D'),
+                size: visibleFills.map(() => 12),
+                symbol: visibleFills.map(f => f.side === 'buy' ? 'triangle-up' : 'triangle-down'),
+                color: visibleFills.map(f => f.side === 'buy' ? '#00FF88' : '#FF4D4D'),
                 line: { color: '#0b1220', width: 1.5 },
             },
-            customdata: fills.map(f => [f.side, f.reason, f.size]),
+            customdata: visibleFills.map(f => [f.side, f.reason, f.size]),
             hovertemplate: '%{customdata[0]} | %{customdata[1]}<br>$%{y:.2f} x %{customdata[2]:.4f}<extra>Signal</extra>',
             showlegend: false, name: 'Fills',
         } : null;
 
         // Trade dots (small, semi-transparent)
-        const last15 = recentTrades.slice(0, 15);
+        const last15 = recentTrades
+            .filter((trade) => {
+                const ts = new Date(trade.ts).getTime();
+                return Number.isFinite(ts) && ts >= firstBarTs - xPadMs && ts <= lastBarTs + xPadMs;
+            })
+            .slice(0, 20);
         const tradeTrace: Data | null = last15.length > 0 ? {
             x: last15.map(t => t.ts),
             y: last15.map(t => t.price),
@@ -231,7 +288,12 @@ export function CandlestickChart({
 
         const traces: Data[] = [candle, upper, lower, vwapTrace, vol, fillTrace, tradeTrace].filter(Boolean) as Data[];
 
-        return { data: traces, shapes: shps, priceRange: { min: minPrice - pad, max: maxPrice + pad } };
+        return {
+            data: traces,
+            shapes: shps,
+            priceRange: { min: minPrice - pad, max: maxPrice + pad },
+            xRange: [xMin, xMax] as [string, string],
+        };
     }, [bars, fills, recentTrades, bestBid, bestAsk]);
 
     if (bars.length === 0) {
@@ -269,6 +331,7 @@ export function CandlestickChart({
             spikethickness: 1,
             spikedash: 'dot',
             rangeslider: { visible: false },
+            ...(xRange ? { range: xRange } : {}),
         },
         yaxis: {
             gridcolor: 'rgba(148,163,184,0.06)',
