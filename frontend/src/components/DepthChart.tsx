@@ -102,7 +102,7 @@ export function DepthChart({ bids, asks, midPrice, className }: DepthChartProps)
     if (isEmpty) {
         return (
             <div className={cn(
-                'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl p-6',
+                'rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl p-6',
                 className,
             )}>
                 <div className="text-xs text-neutral-500 uppercase tracking-wider mb-4">Order Book Depth</div>
@@ -181,15 +181,16 @@ export function DepthChart({ bids, asks, midPrice, className }: DepthChartProps)
 
     return (
         <div className={cn(
-            'rounded-2xl border border-[rgba(0,255,136,0.06)] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
-            'shadow-[0_18px_60px_rgba(0,0,0,0.35)]',
-            'transition-all duration-300 hover:border-[rgba(0,255,136,0.12)]',
-            'hover:shadow-[0_18px_60px_rgba(0,0,0,0.35),0_0_24px_rgba(0,255,136,0.03)]',
+            'rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl overflow-hidden',
+            'shadow-[0_18px_60px_rgba(0,0,0,0.22)]',
+            'transition-all duration-300 hover:border-[rgba(44,227,255,0.12)]',
+            'hover:shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_24px_rgba(44,227,255,0.03)]',
             className,
         )}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+            <div className="relative flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/[0.08]" />
                 <div>
-                    <h3 className="text-sm font-medium text-white">Order Book Depth</h3>
+                    <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-white">Order Book Depth</h3>
                     <span className="text-[10px] text-neutral-500">Cumulative L2 Liquidity</span>
                 </div>
                 <div className="flex items-center gap-3">

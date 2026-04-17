@@ -4,7 +4,6 @@ import type { Data } from "plotly.js";
 import { BentoCard } from "./components/BentoCard";
 import { CandlestickChart } from "./components/CandlestickChart";
 import { DepthChart } from "./components/DepthChart";
-import { GlassPanel } from "./components/GlassPanel";
 import { PlotCard } from "./components/PlotCard";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
@@ -57,15 +56,6 @@ function KpiRow({ label, value, cls }: { label: string; value: string; cls?: str
     <div className="flex justify-between items-center py-1.5 border-b border-white/[0.04] last:border-0 text-[11px]">
       <span className="text-neutral-500">{label}</span>
       <span className={cn("text-neutral-300 font-mono", cls)}>{value}</span>
-    </div>
-  );
-}
-
-function MiniKpi({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[9px] uppercase tracking-wider text-neutral-500">{label}</div>
-      <div className="text-sm font-mono font-semibold text-white mt-0.5">{value}</div>
     </div>
   );
 }
@@ -147,6 +137,17 @@ function OverviewBento({ state }: { state: ApiState }) {
       </BentoCard>
 
       <BentoCard title="Equity Curve" subtitle="performance lane" accent="green" className="bento-overview-equity">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {[
+            `feed ${state.runtime.feed_state}`,
+            `risk ${state.risk_status}`,
+            `fills ${intFmt(state.strategy.fill_count)}`,
+          ].map((item) => (
+            <span key={item} className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] text-neutral-400">
+              {item}
+            </span>
+          ))}
+        </div>
         <div className="h-full [&_.js-plotly-plot]:!h-full">
           <PlotCard
             title=""
@@ -228,6 +229,17 @@ function PriceActionBento({ state }: { state: ApiState }) {
   return (
     <div className="bento-grid-price h-full">
       <BentoCard title="Price Action" subtitle="ohlc + simulated fills" accent="cyan" className="bento-p-chart">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {[
+            state.mid_price == null ? "mid -" : `mid ${money(state.mid_price)}`,
+            state.best_bid && state.best_ask ? `spread ${fmt(((state.best_ask.price - state.best_bid.price) / (state.mid_price || 1)) * 10000, 2)} bps` : "spread -",
+            `trades ${intFmt(state.runtime.trade_events)}`,
+          ].map((item) => (
+            <span key={item} className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[9px] uppercase tracking-[0.14em] text-neutral-400">
+              {item}
+            </span>
+          ))}
+        </div>
         <div className="h-full [&_.js-plotly-plot]:!h-full">
           <CandlestickChart
             midHistory={state.mid_history}

@@ -89,23 +89,24 @@ export function BentoCard({
             >
                 <div className="pointer-events-none absolute inset-0"
                     style={{
-                        background: `radial-gradient(ellipse at 20% 0%, ${a.gradient}, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(44,227,255,0.02), transparent 50%)`,
+                        background: `linear-gradient(180deg, rgba(255,255,255,0.045), transparent 16%), radial-gradient(ellipse at 20% 0%, ${a.gradient}, transparent 50%), radial-gradient(ellipse at 80% 100%, rgba(44,227,255,0.02), transparent 50%)`,
                     }}
                 />
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/[0.08]" />
 
                 <div className={cn(
                     'relative z-10 flex items-center justify-between',
-                    compact ? 'mb-2' : 'px-4 py-2.5 border-b border-white/[0.06]',
+                    compact ? 'mb-2' : 'px-4 py-3 border-b border-white/[0.06]',
                 )}>
                     <div className="flex items-center gap-2 min-w-0">
                         <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', a.dot, a.dotGlow)} />
                         <div className="min-w-0">
                             <h3 className={cn(
-                                'font-medium text-white truncate',
-                                compact ? 'text-[11px]' : 'text-xs',
+                                'font-medium text-white truncate uppercase tracking-[0.12em]',
+                                compact ? 'text-[10px]' : 'text-[11px]',
                             )}>{title}</h3>
                             {subtitle && (
-                                <span className="text-[9px] text-neutral-500 block truncate">{subtitle}</span>
+                                <span className="text-[10px] text-neutral-500 block truncate mt-0.5">{subtitle}</span>
                             )}
                         </div>
                     </div>

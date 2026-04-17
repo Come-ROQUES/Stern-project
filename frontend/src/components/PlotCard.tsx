@@ -66,14 +66,15 @@ export function PlotCard({
 }: PlotCardProps) {
     return (
         <div className={cn(
-            'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
+            'rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl overflow-hidden',
             'shadow-lg shadow-black/10 transition-all duration-200 hover:border-white/[0.12]',
             className,
         )}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+            <div className="relative flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/[0.08]" />
                 <div>
-                    <h3 className="text-sm font-medium text-white">{title}</h3>
-                    {subtitle && <span className="text-[10px] text-neutral-500">{subtitle}</span>}
+                    <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-white">{title}</h3>
+                    {subtitle && <span className="text-[10px] text-neutral-500 mt-0.5 block">{subtitle}</span>}
                 </div>
                 {legend && legend.length > 0 && (
                     <div className="flex items-center gap-2">

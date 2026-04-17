@@ -237,7 +237,7 @@ export function CandlestickChart({
     if (bars.length === 0) {
         return (
             <div className={cn(
-                'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl p-6',
+                'rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl p-6',
                 className
             )}>
                 <div className="text-xs text-neutral-500 uppercase tracking-wider mb-4">Price Action</div>
@@ -315,15 +315,16 @@ export function CandlestickChart({
 
     return (
         <div className={cn(
-            'rounded-2xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-xl overflow-hidden',
-            'shadow-[0_18px_60px_rgba(0,0,0,0.35)]',
+            'rounded-2xl border border-white/[0.08] bg-white/[0.03] backdrop-blur-xl overflow-hidden',
+            'shadow-[0_18px_60px_rgba(0,0,0,0.22)]',
             'transition-all duration-300 hover:border-[rgba(44,227,255,0.12)]',
-            'hover:shadow-[0_18px_60px_rgba(0,0,0,0.35),0_0_30px_rgba(44,227,255,0.03)]',
+            'hover:shadow-[0_18px_60px_rgba(0,0,0,0.24),0_0_30px_rgba(44,227,255,0.03)]',
             className,
         )}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+            <div className="relative flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/[0.08]" />
                 <div>
-                    <h3 className="text-sm font-medium text-white">Price Action</h3>
+                    <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-white">Price Action</h3>
                     <span className="text-[10px] text-neutral-500">OHLC + Signals + ATR + MA</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -349,7 +350,7 @@ export function CandlestickChart({
                             { label: 'MA', color: 'bg-amber-400' },
                             { label: 'ATR', color: 'bg-neutral-500' },
                         ].map(l => (
-                            <span key={l.label} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-white/[0.06] bg-white/[0.02] text-[9px] text-neutral-500 uppercase tracking-wider">
+                            <span key={l.label} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-white/[0.08] bg-white/[0.04] text-[9px] text-neutral-500 uppercase tracking-wider">
                                 <span className={cn('h-1.5 w-1.5 rounded-full', l.color)} />
                                 {l.label}
                             </span>
