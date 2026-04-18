@@ -74,39 +74,13 @@ function Kpi({
   );
 }
 
-function ConnectionStatus({ state }: { state: SternState | null }) {
-  if (!state) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-neutral-500">
-        <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-        Connecting to /api/state…
-      </div>
-    );
-  }
-  const feed = state.runtime.feed_state;
-  const color =
-    feed === "live"
-      ? "bg-emerald-400"
-      : feed === "trades_only"
-        ? "bg-amber-400"
-        : "bg-neutral-500";
-  return (
-    <div className="flex items-center gap-2 text-xs text-neutral-400">
-      <span className={`h-2 w-2 rounded-full ${color}`} />
-      {state.product_id} · {feed} · {state.runtime.messages_seen.toLocaleString()}{" "}
-      msg
-    </div>
-  );
-}
-
 function PanelHeader({
   title,
   subtitle,
-  state,
 }: {
   title: string;
   subtitle: string;
-  state: SternState | null;
+  state?: SternState | null;
 }) {
   return (
     <div className="flex items-end justify-between mb-4">
@@ -116,7 +90,6 @@ function PanelHeader({
         </h2>
         <p className="text-xs text-neutral-500 mt-0.5">{subtitle}</p>
       </div>
-      <ConnectionStatus state={state} />
     </div>
   );
 }
