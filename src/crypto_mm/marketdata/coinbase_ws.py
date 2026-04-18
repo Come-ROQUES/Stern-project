@@ -21,6 +21,7 @@ from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
 
 logger = logging.getLogger(__name__)
 EVENT_LOOP_YIELD_EVERY = 1
+SNAPSHOT_YIELD_EVERY = 500
 
 
 class MarketDataService:
@@ -100,7 +101,7 @@ class MarketDataService:
             logger.warning("coinbase subscription error: %s", message)
             return
         if channel == "l2_data":
-            self._handle_l2_message(message)
+            await self._handle_l2_message(message)
         elif channel == "market_trades":
             self._handle_market_trades_message(message)
 
@@ -124,7 +125,7 @@ class MarketDataService:
             return 0.0
         return sqrt(mean(ret * ret for ret in returns))
 
-    def _handle_l2_message(self, message: dict[str, object]) -> None:
+    async def _handle_l2_message(self, message: dict[str, object]) -> None:
         events = message.get("events", [])
         if not isinstance(events, list):
             return
@@ -140,7 +141,7 @@ class MarketDataService:
             if event_type == "snapshot":
                 bids.clear()
                 asks.clear()
-                for update in updates:
+                for index, update in enumerate(updates):
                     if not isinstance(update, dict):
                         continue
                     side = _normalize_book_side(str(update.get("side", "")))
@@ -150,6 +151,9 @@ class MarketDataService:
                         bids.append((price, size))
                     elif side == "sell":
                         asks.append((price, size))
+                    if index and index % SNAPSHOT_YIELD_EVERY == 0:
+                        # Keep /api/state responsive while the initial L2 dump is parsed.
+                        await asyncio.sleep(0)
                 if bids or asks:
                     self.order_book.apply_snapshot(bids=bids, asks=asks)
             elif event_type == "update":

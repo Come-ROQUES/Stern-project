@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export type BookLevel = {
   price: number;
@@ -162,41 +162,90 @@ export type SternStateResult = {
   lastUpdatedAt: number | null;
 };
 
-export function useSternState(pollMs: number = DEFAULT_POLL_MS): SternStateResult {
-  const [data, setData] = useState<SternState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
-  const cancelled = useRef(false);
+/**
+ * Singleton store — one poller, N subscribers.
+ *
+ * Previous impl ran an independent `fetch + setTimeout` loop per `useSternState`
+ * call. Every crypto panel + the DeskBanner each opened their own poll (500 ms),
+ * so a cockpit with 3 panels issued 3× the traffic AND each consumer had to
+ * wait for its own first response before exiting the CONNECTING state. Now a
+ * single pollLoop feeds all subscribers via useSyncExternalStore; first success
+ * unblocks every consumer at once.
+ */
+const INITIAL_SNAPSHOT: SternStateResult = {
+  data: null,
+  error: null,
+  lastUpdatedAt: null,
+};
 
-  useEffect(() => {
-    cancelled.current = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
+let snapshot: SternStateResult = INITIAL_SNAPSHOT;
+const listeners = new Set<() => void>();
+let activePollMs: number | null = null;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let inFlight: Promise<void> | null = null;
 
-    const tick = async () => {
-      try {
-        const state = await fetchSternState();
-        if (cancelled.current) return;
-        setData(state);
-        setError(null);
-        setLastUpdatedAt(Date.now());
-      } catch (err) {
-        if (cancelled.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!cancelled.current) {
-          timer = setTimeout(tick, pollMs);
-        }
+function emit(next: SternStateResult): void {
+  snapshot = next;
+  listeners.forEach((cb) => cb());
+}
+
+async function runPoll(): Promise<void> {
+  if (listeners.size === 0) {
+    inFlight = null;
+    return;
+  }
+  try {
+    const state = await fetchSternState();
+    emit({ data: state, error: null, lastUpdatedAt: Date.now() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    emit({ data: snapshot.data, error: msg, lastUpdatedAt: snapshot.lastUpdatedAt });
+  } finally {
+    inFlight = null;
+    if (listeners.size > 0 && activePollMs != null) {
+      pollTimer = setTimeout(() => {
+        inFlight = runPoll();
+      }, activePollMs);
+    }
+  }
+}
+
+function subscribe(pollMs: number, listener: () => void): () => void {
+  listeners.add(listener);
+  // Honor the fastest requested cadence so one slow consumer can't starve
+  // a fresh one. In practice every caller uses DEFAULT_POLL_MS today.
+  if (activePollMs == null || pollMs < activePollMs) {
+    activePollMs = pollMs;
+  }
+  if (!inFlight && !pollTimer) {
+    inFlight = runPoll();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
       }
-    };
+      activePollMs = null;
+    }
+  };
+}
 
-    tick();
-    return () => {
-      cancelled.current = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [pollMs]);
+function getSnapshot(): SternStateResult {
+  return snapshot;
+}
 
-  return { data, error, lastUpdatedAt };
+function getServerSnapshot(): SternStateResult {
+  return INITIAL_SNAPSHOT;
+}
+
+export function useSternState(pollMs: number = DEFAULT_POLL_MS): SternStateResult {
+  return useSyncExternalStore(
+    (cb) => subscribe(pollMs, cb),
+    getSnapshot,
+    getServerSnapshot,
+  );
 }
 
 export function downloadCsv(endpoint: "fills" | "pnl" | "spreads"): void {

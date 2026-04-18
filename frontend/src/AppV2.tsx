@@ -35,7 +35,7 @@ import {
 } from './components/HeaderControls';
 import { SideNav, MobileNav } from './components/SideNav';
 import { RunBanner } from './components/RunBanner';
-import { StatusBar } from './components/StatusBar';
+import { DeskBanner } from './components/DeskBanner';
 import { resolveStatusBarGateway } from './components/StatusBar.utils';
 import { DevPanel } from './components/DevPanel';
 import { cn } from './lib/utils';
@@ -1473,50 +1473,9 @@ function AppContent() {
                             </div>
                         )}
 
-                        {/* Status Bar (terminal only) */}
+                        {/* Desk Banner (terminal only) — unifies forex + crypto MM */}
                         {appMode === 'terminal' && (
-                            <div
-                                className={
-                                    'rounded-xl border border-white/[0.08] ' +
-                                    'bg-white/[0.02] backdrop-blur-xl'
-                                }
-                            >
-                                <StatusBar
-                                    mode="LIVE"
-                                    symbol="EURUSD"
-                                    gatewayUp={gatewayUp}
-                                    killSwitch={killSwitch}
-                                    marketOpen={(statusData.system as any)?.market_open ?? null}
-                                    bid={(statusData.system as any)?.bid ?? (statusData.system as any)?.price?.bid ?? null}
-                                    ask={(statusData.system as any)?.ask ?? (statusData.system as any)?.price?.ask ?? null}
-                                    spreadPips={spreadPips}
-                                    lastTick={lastTickIso}
-                                    lastTickAgeMs={tickAgeMs ?? undefined}
-                                    dataSourceLabel={dataSourceLabel ?? undefined}
-                                    latencyMs={effectiveLatencyMs ?? undefined}
-                                    bufferReady={warmupReady}
-                                    warmupBars={statusData.warmupBars}
-                                    warmupTarget={warmupTarget}
-                                    volRegime={statusData.profile?.regime ?? null}
-                                    atrPips={statusData.profile?.atr_pips ?? null}
-                                    activeSignal={
-                                        statusData.latestSignal?.direction ?? null
-                                    }
-                                    strategyId={activeContext.strategy_id}
-                                    strategyVersion={
-                                        runInfo.strategy_version ??
-                                        activeContext.strategy_version
-                                    }
-                                    runId={runInfo.run_id ?? runId ?? activeContext.run_id}
-                                    scope="TODAY"
-                                    readinessStatus={
-                                        (statusData.system as any)?.readiness_status ??
-                                        statusData.readinessStatus ??
-                                        (statusData.system as any)?.warmup_status ??
-                                        null
-                                    }
-                                />
-                            </div>
+                            <DeskBanner />
                         )}
 
                         {/* Tab Question */}
