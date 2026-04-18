@@ -690,11 +690,17 @@ export function OverviewPanel() {
 }
 
 // ============================================================================
-// Pro Terminal — orderbook + tape + spread metrics
+// Pro Terminal — L2 book, depth curve, tape, trade flow, spread analytics
+// All visuals are SVG/CSS so the whole panel stays reactive at stream cadence
+// (≈ 500 ms). A shared `selectedPrice` cross-highlights the ladder and the
+// depth curve so clicking a rung pins that price across panels.
 // ============================================================================
 
 const LADDER_DEPTH = 10;
 const IMBALANCE_TOP_N = 5;
+const DEPTH_CURVE_LEVELS = 20;
+const FLOW_WINDOW_MS = 60_000;
+const FLOW_BUCKETS = 20;
 
 type LadderRung = {
   price: number;
@@ -719,12 +725,16 @@ function Rung({
   maxSize,
   maxCum,
   isBest,
+  isSelected,
+  onSelect,
 }: {
   rung: LadderRung | null;
   side: "bid" | "ask";
   maxSize: number;
   maxCum: number;
   isBest: boolean;
+  isSelected: boolean;
+  onSelect: (price: number | null) => void;
 }) {
   const sizePct = rung ? (rung.size / maxSize) * 100 : 0;
   const cumPct = rung ? (rung.cum / maxCum) * 100 : 0;
@@ -737,13 +747,21 @@ function Rung({
       ? "ring-1 ring-inset ring-emerald-400/50"
       : "ring-1 ring-inset ring-rose-400/50"
     : "";
+  const selectedBg = isSelected
+    ? "bg-cyan-400/10 ring-1 ring-inset ring-cyan-400/50"
+    : rung
+      ? "hover:bg-white/[0.03]"
+      : "";
 
-  // Layout: bid puts size on the LEFT, price in the MIDDLE; ask mirrors.
   return (
-    <div
-      className={`relative grid grid-cols-[1fr_auto_1fr] items-center h-[22px] px-1 text-xs font-mono ${bestRing}`}
+    <button
+      type="button"
+      disabled={!rung}
+      onClick={() =>
+        rung && onSelect(isSelected ? null : rung.price)
+      }
+      className={`relative grid grid-cols-[1fr_auto_1fr] items-center h-[22px] px-1 text-xs font-mono w-full text-left transition-colors ${bestRing} ${selectedBg}`}
     >
-      {/* Depth bar: grows from the price axis toward the outer edge */}
       {rung && (
         <div
           className={`absolute top-0 bottom-0 ${depthBg} pointer-events-none`}
@@ -753,7 +771,6 @@ function Rung({
           }}
         />
       )}
-      {/* Cumulative depth tick: thin outer rail */}
       {rung && (
         <div
           className={`absolute top-0 bottom-0 ${cumBg} pointer-events-none`}
@@ -763,23 +780,28 @@ function Rung({
           }}
         />
       )}
-      {/* Left slot: size (bid only) */}
-      <span className="relative text-left text-neutral-300 pl-1">
+      <span className="relative text-left text-neutral-300 pl-1 tabular-nums">
         {isBid && rung ? rung.size.toFixed(4) : ""}
       </span>
-      {/* Center: price */}
       <span className={`relative px-2 ${priceColor} tabular-nums`}>
         {rung ? formatNumber(rung.price, 2) : "—"}
       </span>
-      {/* Right slot: size (ask only) */}
-      <span className="relative text-right text-neutral-300 pr-1">
+      <span className="relative text-right text-neutral-300 pr-1 tabular-nums">
         {!isBid && rung ? rung.size.toFixed(4) : ""}
       </span>
-    </div>
+    </button>
   );
 }
 
-function L2Ladder({ state }: { state: SternState | null }) {
+function L2Ladder({
+  state,
+  selectedPrice,
+  onSelectPrice,
+}: {
+  state: SternState | null;
+  selectedPrice: number | null;
+  onSelectPrice: (price: number | null) => void;
+}) {
   const bids = state?.book.bids ?? [];
   const asks = state?.book.asks ?? [];
 
@@ -822,26 +844,28 @@ function L2Ladder({ state }: { state: SternState | null }) {
     return { bidVol, askVol, ratio };
   }, [bidRungs, askRungs]);
 
-  // Pad to fixed depth so rows don't jitter when book shrinks.
   const askRows = Array.from(
     { length: LADDER_DEPTH },
     (_, i) => askRungs[i] ?? null,
-  ).reverse(); // best ask at bottom, closest to mid ribbon
+  ).reverse();
   const bidRows = Array.from(
     { length: LADDER_DEPTH },
     (_, i) => bidRungs[i] ?? null,
   );
 
+  const selectedDeltaBps =
+    selectedPrice != null && mid != null && mid > 0
+      ? ((selectedPrice - mid) / mid) * 10000
+      : null;
+
   return (
     <div className="flex flex-col h-full">
-      {/* Column headers */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center px-1 pb-1 text-[10px] uppercase tracking-wider text-neutral-500">
         <span className="text-left pl-1">Bid Size</span>
         <span className="px-2">Price</span>
         <span className="text-right pr-1">Ask Size</span>
       </div>
 
-      {/* Asks (top N, reversed) */}
       <div>
         {askRows.map((r, i) => (
           <Rung
@@ -851,11 +875,14 @@ function L2Ladder({ state }: { state: SternState | null }) {
             maxSize={maxSize}
             maxCum={maxCum}
             isBest={r != null && bestAsk != null && r.price === bestAsk.price}
+            isSelected={
+              r != null && selectedPrice != null && r.price === selectedPrice
+            }
+            onSelect={onSelectPrice}
           />
         ))}
       </div>
 
-      {/* Mid / spread ribbon */}
       <div className="my-1 grid grid-cols-3 items-center px-1 py-1.5 rounded bg-neutral-500/5 border-y border-neutral-500/15 text-xs font-mono">
         <span className="text-[10px] uppercase tracking-wider text-neutral-500">
           Mid
@@ -873,7 +900,6 @@ function L2Ladder({ state }: { state: SternState | null }) {
         </span>
       </div>
 
-      {/* Bids */}
       <div>
         {bidRows.map((r, i) => (
           <Rung
@@ -883,11 +909,34 @@ function L2Ladder({ state }: { state: SternState | null }) {
             maxSize={maxSize}
             maxCum={maxCum}
             isBest={r != null && bestBid != null && r.price === bestBid.price}
+            isSelected={
+              r != null && selectedPrice != null && r.price === selectedPrice
+            }
+            onSelect={onSelectPrice}
           />
         ))}
       </div>
 
-      {/* Imbalance footer */}
+      {selectedPrice != null && (
+        <div className="mt-2 flex items-center justify-between gap-2 px-2 py-1.5 rounded bg-cyan-500/5 border border-cyan-500/25 text-[11px] font-mono">
+          <span className="text-cyan-300 tabular-nums">
+            Pinned {formatUsd(selectedPrice, 2)}
+          </span>
+          <span className="text-neutral-400 tabular-nums">
+            {selectedDeltaBps != null
+              ? `${selectedDeltaBps >= 0 ? "+" : ""}${selectedDeltaBps.toFixed(1)} bps`
+              : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => onSelectPrice(null)}
+            className="text-neutral-500 hover:text-neutral-200 text-[10px] uppercase tracking-wider"
+          >
+            clear
+          </button>
+        </div>
+      )}
+
       <ImbalanceBar
         bidVol={imbalance.bidVol}
         askVol={imbalance.askVol}
@@ -943,102 +992,824 @@ function ImbalanceBar({
   );
 }
 
-function TradeTape({ trades }: { trades: PublicTrade[] }) {
+// ----------------------------------------------------------------------------
+// Depth curve — cumulative BTC on each side, step-area, hover + pinned price
+// ----------------------------------------------------------------------------
+
+type DepthHover = {
+  x: number;
+  price: number;
+  cum: number;
+  side: "bid" | "ask";
+};
+
+function DepthChart({
+  bids,
+  asks,
+  mid,
+  selectedPrice,
+}: {
+  bids: BookLevel[];
+  asks: BookLevel[];
+  mid: number | null;
+  selectedPrice: number | null;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [width, setWidth] = useState(600);
+  const [hover, setHover] = useState<DepthHover | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        setWidth(Math.max(1, Math.floor(e.contentRect.width)));
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const H = 240;
+  const PAD = 16;
+
+  const model = useMemo(() => {
+    if (mid == null || (bids.length === 0 && asks.length === 0)) return null;
+    const bidSlice = bids.slice(0, DEPTH_CURVE_LEVELS);
+    const askSlice = asks.slice(0, DEPTH_CURVE_LEVELS);
+
+    let bidCum = 0;
+    const bidPts: Array<{ price: number; cum: number }> = [];
+    for (const b of bidSlice) {
+      bidCum += b.size;
+      bidPts.push({ price: b.price, cum: bidCum });
+    }
+    let askCum = 0;
+    const askPts: Array<{ price: number; cum: number }> = [];
+    for (const a of askSlice) {
+      askCum += a.size;
+      askPts.push({ price: a.price, cum: askCum });
+    }
+
+    const bestBid = bidPts[0]?.price ?? mid;
+    const bestAsk = askPts[0]?.price ?? mid;
+    const worstBid = bidPts[bidPts.length - 1]?.price ?? bestBid;
+    const worstAsk = askPts[askPts.length - 1]?.price ?? bestAsk;
+    const half = Math.max(Math.abs(mid - worstBid), Math.abs(worstAsk - mid));
+    const pad = Math.max(half * 0.05, 0.01);
+    const lo = mid - half - pad;
+    const hi = mid + half + pad;
+    const maxC = Math.max(bidCum, askCum, 1e-9);
+
+    return {
+      bidPts,
+      askPts,
+      bestBid,
+      bestAsk,
+      worstBid,
+      worstAsk,
+      lo,
+      hi,
+      maxC,
+      bidTotal: bidCum,
+      askTotal: askCum,
+    };
+  }, [bids, asks, mid]);
+
+  if (!model || mid == null) {
+    return (
+      <div
+        ref={containerRef}
+        className="h-[240px] flex items-center justify-center text-sm text-neutral-500"
+      >
+        Warming up book…
+      </div>
+    );
+  }
+
+  const W = width;
+  const x = (p: number) =>
+    PAD + ((p - model.lo) / (model.hi - model.lo)) * (W - 2 * PAD);
+  const y = (c: number) => H - PAD - (c / model.maxC) * (H - 2 * PAD);
+
+  let bidPath = "";
+  if (model.bidPts.length > 0) {
+    bidPath = `M ${x(model.bestBid)} ${H - PAD} L ${x(model.bestBid)} ${y(model.bidPts[0].cum)}`;
+    let cum = model.bidPts[0].cum;
+    for (let i = 1; i < model.bidPts.length; i++) {
+      const px = x(model.bidPts[i].price);
+      bidPath += ` L ${px} ${y(cum)} L ${px} ${y(model.bidPts[i].cum)}`;
+      cum = model.bidPts[i].cum;
+    }
+    bidPath += ` L ${x(model.worstBid)} ${H - PAD} Z`;
+  }
+
+  let askPath = "";
+  if (model.askPts.length > 0) {
+    askPath = `M ${x(model.bestAsk)} ${H - PAD} L ${x(model.bestAsk)} ${y(model.askPts[0].cum)}`;
+    let cum = model.askPts[0].cum;
+    for (let i = 1; i < model.askPts.length; i++) {
+      const px = x(model.askPts[i].price);
+      askPath += ` L ${px} ${y(cum)} L ${px} ${y(model.askPts[i].cum)}`;
+      cum = model.askPts[i].cum;
+    }
+    askPath += ` L ${x(model.worstAsk)} ${H - PAD} Z`;
+  }
+
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const pxPos = ((e.clientX - rect.left) / rect.width) * W;
+    const price =
+      model.lo + ((pxPos - PAD) / (W - 2 * PAD)) * (model.hi - model.lo);
+    if (price < model.lo || price > model.hi) return;
+    const side: "bid" | "ask" = price < mid ? "bid" : "ask";
+    let cum = 0;
+    if (side === "bid") {
+      for (const pt of model.bidPts) if (pt.price >= price) cum = pt.cum;
+    } else {
+      for (const pt of model.askPts) if (pt.price <= price) cum = pt.cum;
+    }
+    setHover({ x: pxPos, price, cum, side });
+  };
+
+  const selectedInRange =
+    selectedPrice != null &&
+    selectedPrice >= model.lo &&
+    selectedPrice <= model.hi;
+
   return (
-    <table className="glass-table w-full text-xs font-mono">
-      <thead>
-        <tr>
-          <th className="text-left">Time</th>
-          <th className="text-left">Side</th>
-          <th className="text-right">Price</th>
-          <th className="text-right">Size</th>
-        </tr>
-      </thead>
-      <tbody>
-        {trades.slice(0, 40).map((trade, idx) => (
-          <tr key={`${trade.trade_id ?? idx}-${trade.ts}`}>
-            <td className="text-neutral-500">{formatClockTime(trade.ts)}</td>
-            <td
-              className={
-                trade.side === "buy" ? "text-emerald-300" : "text-rose-300"
-              }
-            >
-              {trade.side}
-            </td>
-            <td className="text-right">{formatNumber(trade.price, 2)}</td>
-            <td className="text-right">{trade.size.toFixed(4)}</td>
-          </tr>
+    <div ref={containerRef} className="relative">
+      <svg
+        ref={svgRef}
+        width={W}
+        height={H}
+        onMouseMove={handleMove}
+        onMouseLeave={() => setHover(null)}
+        className="select-none cursor-crosshair block"
+      >
+        {[0.25, 0.5, 0.75].map((f) => (
+          <line
+            key={f}
+            x1={PAD}
+            x2={W - PAD}
+            y1={PAD + f * (H - 2 * PAD)}
+            y2={PAD + f * (H - 2 * PAD)}
+            stroke="rgba(82, 82, 91, 0.18)"
+            strokeDasharray="2 4"
+          />
         ))}
-      </tbody>
-    </table>
+        <path
+          d={bidPath}
+          fill="rgba(34, 197, 94, 0.2)"
+          stroke="#22c55e"
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+        />
+        <path
+          d={askPath}
+          fill="rgba(239, 68, 68, 0.2)"
+          stroke="#ef4444"
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+        />
+        <line
+          x1={x(mid)}
+          x2={x(mid)}
+          y1={PAD}
+          y2={H - PAD}
+          stroke="rgba(148, 163, 184, 0.55)"
+          strokeDasharray="3 3"
+        />
+        <text
+          x={x(mid)}
+          y={PAD - 4}
+          textAnchor="middle"
+          fontSize="10"
+          fill="#a1a1aa"
+          fontFamily="ui-monospace, monospace"
+        >
+          mid {formatUsd(mid, 2)}
+        </text>
+        {selectedInRange && (
+          <>
+            <line
+              x1={x(selectedPrice!)}
+              x2={x(selectedPrice!)}
+              y1={PAD}
+              y2={H - PAD}
+              stroke="#2ce3ff"
+              strokeWidth="1"
+            />
+            <rect
+              x={x(selectedPrice!) - 28}
+              y={H - PAD - 14}
+              width="56"
+              height="12"
+              rx="2"
+              fill="rgba(8, 145, 178, 0.85)"
+            />
+            <text
+              x={x(selectedPrice!)}
+              y={H - PAD - 5}
+              textAnchor="middle"
+              fontSize="9"
+              fill="#ecfeff"
+              fontFamily="ui-monospace, monospace"
+            >
+              pin {formatUsd(selectedPrice!, 2)}
+            </text>
+          </>
+        )}
+        {hover && (
+          <line
+            x1={hover.x}
+            x2={hover.x}
+            y1={PAD}
+            y2={H - PAD}
+            stroke="rgba(255,255,255,0.45)"
+          />
+        )}
+      </svg>
+
+      {hover && (
+        <div
+          className="absolute text-[10px] font-mono pointer-events-none px-2 py-1 rounded bg-neutral-900/95 border border-neutral-500/30 text-neutral-100 whitespace-nowrap shadow-lg"
+          style={{
+            left: Math.min(W - 150, Math.max(4, hover.x + 8)),
+            top: 6,
+          }}
+        >
+          <div
+            className={
+              hover.side === "bid" ? "text-emerald-300" : "text-rose-300"
+            }
+          >
+            {hover.side === "bid" ? "BID" : "ASK"} {formatUsd(hover.price, 2)}
+          </div>
+          <div className="text-neutral-300 tabular-nums">
+            cum {hover.cum.toFixed(4)} BTC
+          </div>
+          <div className="text-neutral-500 tabular-nums">
+            {(((hover.price - mid) / mid) * 10000).toFixed(1)} bps from mid
+          </div>
+        </div>
+      )}
+
+      <div className="mt-1 grid grid-cols-2 text-[10px] font-mono">
+        <span className="text-emerald-300 tabular-nums">
+          Σ bids {model.bidTotal.toFixed(4)} BTC
+        </span>
+        <span className="text-right text-rose-300 tabular-nums">
+          {model.askTotal.toFixed(4)} BTC asks Σ
+        </span>
+      </div>
+    </div>
   );
 }
 
-function SpreadMetricsTable({
+// ----------------------------------------------------------------------------
+// Compact tape — size-weighted heatmap rows
+// ----------------------------------------------------------------------------
+
+function CompactTape({ trades }: { trades: PublicTrade[] }) {
+  const slice = trades.slice(0, 60);
+  const maxSize = useMemo(() => {
+    let m = 1e-9;
+    for (const t of slice) if (t.size > m) m = t.size;
+    return m;
+  }, [slice]);
+
+  return (
+    <div className="glass-scroll max-h-[360px] overflow-auto">
+      <table className="w-full text-[11px] font-mono">
+        <tbody>
+          {slice.map((t, i) => {
+            const intensity = Math.min(1, t.size / maxSize);
+            const alpha = 0.04 + intensity * 0.22;
+            const bg =
+              t.side === "buy"
+                ? `rgba(34, 197, 94, ${alpha})`
+                : `rgba(239, 68, 68, ${alpha})`;
+            return (
+              <tr
+                key={`${t.trade_id ?? i}-${t.ts}`}
+                style={{ background: bg }}
+                className="border-b border-neutral-500/5 last:border-0"
+              >
+                <td className="text-neutral-500 px-2 py-[3px] tabular-nums">
+                  {formatClockTime(t.ts)}
+                </td>
+                <td
+                  className={`px-1 py-[3px] font-semibold ${
+                    t.side === "buy" ? "text-emerald-300" : "text-rose-300"
+                  }`}
+                >
+                  {t.side === "buy" ? "B" : "S"}
+                </td>
+                <td className="text-right px-1 py-[3px] tabular-nums text-neutral-100">
+                  {formatNumber(t.price, 2)}
+                </td>
+                <td className="text-right px-2 py-[3px] tabular-nums text-neutral-300">
+                  {t.size.toFixed(4)}
+                </td>
+              </tr>
+            );
+          })}
+          {slice.length === 0 && (
+            <tr>
+              <td
+                colSpan={4}
+                className="text-center text-neutral-500 py-4"
+              >
+                No trades yet
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Trade flow — stacked volume histogram over a 60s rolling window
+// ----------------------------------------------------------------------------
+
+function TradeFlow({ trades }: { trades: PublicTrade[] }) {
+  const flow = useMemo(() => {
+    const now = Date.now();
+    const bucketMs = FLOW_WINDOW_MS / FLOW_BUCKETS;
+    const buckets = Array.from({ length: FLOW_BUCKETS }, () => ({
+      buy: 0,
+      sell: 0,
+    }));
+    let totalBuy = 0;
+    let totalSell = 0;
+    for (const t of trades) {
+      const ts = Date.parse(t.ts);
+      if (!Number.isFinite(ts)) continue;
+      const age = now - ts;
+      if (age < 0 || age >= FLOW_WINDOW_MS) continue;
+      const idx = Math.min(
+        FLOW_BUCKETS - 1,
+        Math.max(0, FLOW_BUCKETS - 1 - Math.floor(age / bucketMs)),
+      );
+      if (t.side === "buy") {
+        buckets[idx].buy += t.size;
+        totalBuy += t.size;
+      } else {
+        buckets[idx].sell += t.size;
+        totalSell += t.size;
+      }
+    }
+    let maxVol = 1e-9;
+    for (const b of buckets) {
+      if (b.buy > maxVol) maxVol = b.buy;
+      if (b.sell > maxVol) maxVol = b.sell;
+    }
+    return { buckets, totalBuy, totalSell, maxVol };
+  }, [trades]);
+
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const total = flow.totalBuy + flow.totalSell;
+  const buyPct = total > 0 ? (flow.totalBuy / total) * 100 : 50;
+  const netPct = total > 0 ? ((flow.totalBuy - flow.totalSell) / total) * 100 : 0;
+  const netLabel =
+    netPct > 5 ? "buy pressure" : netPct < -5 ? "sell pressure" : "balanced";
+  const netColor =
+    netPct > 5
+      ? "text-emerald-300"
+      : netPct < -5
+        ? "text-rose-300"
+        : "text-neutral-400";
+
+  const W = 600;
+  const H = 140;
+  const midY = H / 2;
+  const barW = W / FLOW_BUCKETS;
+
+  const hovered = hoverIdx != null ? flow.buckets[hoverIdx] : null;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-2 text-xs font-mono">
+        <span className="text-emerald-300 tabular-nums">
+          Buy {flow.totalBuy.toFixed(4)}
+        </span>
+        <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+          60s rolling
+        </span>
+        <span className="text-rose-300 tabular-nums">
+          {flow.totalSell.toFixed(4)} Sell
+        </span>
+      </div>
+
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          className="w-full h-[140px] block"
+          onMouseLeave={() => setHoverIdx(null)}
+        >
+          <line
+            x1="0"
+            x2={W}
+            y1={midY}
+            y2={midY}
+            stroke="rgba(148, 163, 184, 0.35)"
+          />
+          {flow.buckets.map((b, i) => {
+            const buyH = (b.buy / flow.maxVol) * (midY - 2);
+            const sellH = (b.sell / flow.maxVol) * (midY - 2);
+            const bx = i * barW + 1;
+            const bw = Math.max(1, barW - 2);
+            const isHover = hoverIdx === i;
+            return (
+              <g
+                key={i}
+                onMouseEnter={() => setHoverIdx(i)}
+                style={{ cursor: "default" }}
+              >
+                <rect
+                  x={bx - 1}
+                  y={0}
+                  width={bw + 2}
+                  height={H}
+                  fill="transparent"
+                />
+                <rect
+                  x={bx}
+                  y={midY - buyH}
+                  width={bw}
+                  height={buyH}
+                  fill={
+                    isHover
+                      ? "rgba(34, 197, 94, 0.95)"
+                      : "rgba(34, 197, 94, 0.6)"
+                  }
+                />
+                <rect
+                  x={bx}
+                  y={midY + 1}
+                  width={bw}
+                  height={sellH}
+                  fill={
+                    isHover
+                      ? "rgba(239, 68, 68, 0.95)"
+                      : "rgba(239, 68, 68, 0.6)"
+                  }
+                />
+              </g>
+            );
+          })}
+        </svg>
+        {hovered && hoverIdx != null && (
+          <div className="absolute top-1 right-2 text-[10px] font-mono px-2 py-1 rounded bg-neutral-900/95 border border-neutral-500/30 pointer-events-none">
+            <div className="text-neutral-500 uppercase tracking-wider text-[9px]">
+              t-{((FLOW_BUCKETS - 1 - hoverIdx) * (FLOW_WINDOW_MS / FLOW_BUCKETS / 1000)).toFixed(0)}s
+            </div>
+            <div className="text-emerald-300 tabular-nums">
+              B {hovered.buy.toFixed(4)}
+            </div>
+            <div className="text-rose-300 tabular-nums">
+              S {hovered.sell.toFixed(4)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+          <span>Net flow</span>
+          <span className={`font-mono normal-case tracking-normal ${netColor}`}>
+            {netPct >= 0 ? "+" : ""}
+            {netPct.toFixed(1)}% · {netLabel}
+          </span>
+        </div>
+        <div className="relative h-1.5 rounded-sm overflow-hidden bg-neutral-500/10">
+          <div
+            className="absolute inset-y-0 left-0 bg-emerald-500/60"
+            style={{ width: `${buyPct}%` }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 bg-rose-500/60"
+            style={{ width: `${100 - buyPct}%` }}
+          />
+          <div className="absolute inset-y-0 left-1/2 w-px bg-neutral-200/50" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// Interactive spread analytics — per-tier sparklines + expandable histogram
+// ----------------------------------------------------------------------------
+
+function Sparkline({
+  values,
+  width = 160,
+  height = 28,
+  stroke = "#2ce3ff",
+  fill = "rgba(44, 227, 255, 0.12)",
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+  stroke?: string;
+  fill?: string;
+}) {
+  if (values.length < 2) {
+    return (
+      <div
+        className="text-neutral-600 text-[10px] flex items-center"
+        style={{ height }}
+      >
+        —
+      </div>
+    );
+  }
+  let min = values[0];
+  let max = values[0];
+  for (const v of values) {
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const span = Math.max(1e-9, max - min);
+  const n = values.length;
+  let path = "";
+  let area = "";
+  for (let i = 0; i < n; i++) {
+    const px = (i / (n - 1)) * width;
+    const py = height - ((values[i] - min) / span) * (height - 4) - 2;
+    path += `${i === 0 ? "M" : "L"} ${px.toFixed(1)} ${py.toFixed(1)} `;
+    if (i === 0) area = `M ${px.toFixed(1)} ${height} L ${px.toFixed(1)} ${py.toFixed(1)} `;
+    else area += `L ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  area += `L ${width} ${height} Z`;
+  const lastY =
+    height - ((values[n - 1] - min) / span) * (height - 4) - 2;
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height }}
+    >
+      <path d={area} fill={fill} />
+      <path
+        d={path}
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.25"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <circle cx={width} cy={lastY} r="1.75" fill={stroke} />
+    </svg>
+  );
+}
+
+function Histogram({
+  values,
+  width = 320,
+  height = 80,
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+}) {
+  if (values.length < 4) {
+    return (
+      <div
+        className="text-neutral-600 text-[10px] flex items-center"
+        style={{ height }}
+      >
+        warming up…
+      </div>
+    );
+  }
+  let min = values[0];
+  let max = values[0];
+  for (const v of values) {
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const span = Math.max(1e-9, max - min);
+  const bins = 18;
+  const counts = new Array(bins).fill(0) as number[];
+  for (const v of values) {
+    const idx = Math.min(
+      bins - 1,
+      Math.max(0, Math.floor(((v - min) / span) * bins)),
+    );
+    counts[idx] += 1;
+  }
+  let maxC = 1;
+  for (const c of counts) if (c > maxC) maxC = c;
+  const barW = width / bins;
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="w-full"
+      style={{ height }}
+    >
+      {counts.map((c, i) => {
+        const h = (c / maxC) * (height - 4);
+        return (
+          <rect
+            key={i}
+            x={i * barW + 1}
+            y={height - h - 2}
+            width={Math.max(1, barW - 2)}
+            height={h}
+            fill="rgba(44, 227, 255, 0.5)"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function SpreadAnalytics({
   metrics,
+  history,
 }: {
   metrics: Record<string, SpreadMetric>;
+  history: Record<string, number[]>;
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const depths = Object.keys(metrics);
+
+  if (depths.length === 0) {
+    return (
+      <div className="py-6 text-center text-sm text-neutral-500">
+        Warming up spread samples…
+      </div>
+    );
+  }
+
   return (
-    <table className="glass-table w-full text-xs font-mono">
-      <thead>
-        <tr>
-          <th className="text-left">Depth</th>
-          <th className="text-right">Last</th>
-          <th className="text-right">Avg</th>
-          <th className="text-right">Median</th>
-          <th className="text-right">Min</th>
-          <th className="text-right">Max</th>
-        </tr>
-      </thead>
-      <tbody>
-        {depths.map((depth) => {
-          const m = metrics[depth];
-          return (
-            <tr key={depth}>
-              <td className="text-neutral-400">{depth}</td>
-              <td className="text-right">{formatUsd(m.last, 2)}</td>
-              <td className="text-right">{formatUsd(m.avg, 2)}</td>
-              <td className="text-right">{formatUsd(m.median, 2)}</td>
-              <td className="text-right">{formatUsd(m.min, 2)}</td>
-              <td className="text-right">{formatUsd(m.max, 2)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div>
+      <div className="grid grid-cols-[72px_1fr_80px_80px_72px_72px_16px] gap-2 items-center px-2 py-1.5 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-neutral-500/15">
+        <span>Depth</span>
+        <span>Trend</span>
+        <span className="text-right">Last</span>
+        <span className="text-right">Avg</span>
+        <span className="text-right">Min</span>
+        <span className="text-right">Max</span>
+        <span />
+      </div>
+      {depths.map((depth) => {
+        const m = metrics[depth];
+        const h = history[depth] ?? [];
+        const exp = expanded === depth;
+        const trend =
+          h.length >= 2 ? h[h.length - 1] - h[h.length - Math.min(h.length, 20)] : 0;
+        const trendColor =
+          trend > 0
+            ? "text-rose-300"
+            : trend < 0
+              ? "text-emerald-300"
+              : "text-neutral-400";
+        return (
+          <div
+            key={depth}
+            className={`${exp ? "bg-white/[0.02]" : ""} border-b border-neutral-500/10 last:border-0`}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setExpanded((prev) => (prev === depth ? null : depth))
+              }
+              className="w-full grid grid-cols-[72px_1fr_80px_80px_72px_72px_16px] gap-2 items-center px-2 py-2 text-xs font-mono text-left hover:bg-white/[0.015] transition-colors focus:outline-none focus:bg-white/[0.03]"
+              aria-expanded={exp}
+            >
+              <span className="text-neutral-300">{depth}</span>
+              <Sparkline values={h} />
+              <span className="text-right text-neutral-100 tabular-nums">
+                {formatUsd(m.last, 2)}
+              </span>
+              <span className="text-right text-neutral-400 tabular-nums">
+                {formatUsd(m.avg, 2)}
+              </span>
+              <span className="text-right text-emerald-300/90 tabular-nums">
+                {formatUsd(m.min, 2)}
+              </span>
+              <span className="text-right text-rose-300/90 tabular-nums">
+                {formatUsd(m.max, 2)}
+              </span>
+              <ChevronIcon expanded={exp} />
+            </button>
+            {exp && (
+              <div className="px-3 pb-4 pt-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="md:col-span-3">
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                    <span>Session history</span>
+                    <span
+                      className={`font-mono normal-case tracking-normal ${trendColor}`}
+                    >
+                      {trend >= 0 ? "+" : ""}
+                      {formatUsd(trend, 2)} recent
+                    </span>
+                  </div>
+                  <Sparkline values={h} height={72} />
+                  <div className="mt-1 flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
+                    <span>{h.length} samples</span>
+                    <span>median {formatUsd(m.median, 2)}</span>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                    Distribution
+                  </div>
+                  <Histogram values={h} />
+                  <div className="mt-1 flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
+                    <span>min {formatUsd(m.min, 2)}</span>
+                    <span>max {formatUsd(m.max, 2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
 export function ProTerminalPanel() {
   const { data: state } = useSternState();
+  const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
+
   return (
     <div className="p-6 space-y-4">
       <PanelHeader
         title="Pro Terminal"
-        subtitle="Live L2 orderbook, tape and depth-weighted spread analytics"
+        subtitle="L2 book · depth curve · tape · trade flow · interactive spread analytics"
         state={state}
       />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <Panel
           title="L2 Order Book"
-          subtitle={`Top ${LADDER_DEPTH} each side · cumulative depth · imbalance top ${IMBALANCE_TOP_N}`}
+          subtitle={`Top ${LADDER_DEPTH} each side · click a rung to pin`}
+          className="lg:col-span-4"
         >
-          <L2Ladder state={state ?? null} />
+          <L2Ladder
+            state={state ?? null}
+            selectedPrice={selectedPrice}
+            onSelectPrice={setSelectedPrice}
+          />
         </Panel>
-        <Panel title="Tape" subtitle="Latest 40 public trades">
-          <div className="glass-scroll max-h-[520px] overflow-auto">
-            <TradeTape trades={state?.recent_trades ?? []} />
-          </div>
+
+        <Panel
+          title="Depth Curve"
+          subtitle="Cumulative BTC · hover for price/size/bps · mirrors ladder pin"
+          className="lg:col-span-5"
+        >
+          <DepthChart
+            bids={state?.book.bids ?? []}
+            asks={state?.book.asks ?? []}
+            mid={state?.mid_price ?? null}
+            selectedPrice={selectedPrice}
+          />
+        </Panel>
+
+        <Panel
+          title="Tape"
+          subtitle="Last 60 prints · tint ∝ size"
+          className="lg:col-span-3"
+        >
+          <CompactTape trades={state?.recent_trades ?? []} />
         </Panel>
       </div>
-      <Panel
-        title="Depth-weighted spread metrics"
-        subtitle="Avg / median / min / max over session, by depth in BTC"
-      >
-        <SpreadMetricsTable metrics={state?.spread_metrics ?? {}} />
-      </Panel>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <Panel
+          title="Trade Flow"
+          subtitle="60s rolling buy / sell volume — hover bars"
+          className="lg:col-span-4"
+        >
+          <TradeFlow trades={state?.recent_trades ?? []} />
+        </Panel>
+
+        <Panel
+          title="Depth-weighted Spread"
+          subtitle="Per-tier trend · click a row for distribution"
+          className="lg:col-span-8"
+        >
+          <SpreadAnalytics
+            metrics={state?.spread_metrics ?? {}}
+            history={state?.spread_history ?? {}}
+          />
+        </Panel>
+      </div>
     </div>
   );
 }
