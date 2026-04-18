@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #060910;
+  --panel: #0d1624;
+  --accent: #2ce3ff;
+  --text: #e2e8f0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Sans", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: "IBM Plex Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  @apply rounded-2xl p-4;
+  background: rgba(13, 22, 36, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.2s ease;
+}
+
+.panel:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.panel-title {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.panel-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.bg-scape {
+  background: radial-gradient(circle at 14% 20%, rgba(44, 227, 255, 0.06), transparent 22%),
+    radial-gradient(circle at 80% 10%, rgba(88, 110, 168, 0.06), transparent 20%),
+    radial-gradient(circle at 60% 76%, rgba(44, 227, 255, 0.04), transparent 28%),
+    var(--bg);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .panel {
+    padding: 12px;
+    border-radius: 14px;
+  }
+}

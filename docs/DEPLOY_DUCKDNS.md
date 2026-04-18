@@ -148,3 +148,27 @@ https://<subdomain>.duckdns.org
 - DuckDNS est parfait pour te differencier vite en entretien
 - si tu veux une couche encore plus propre, on pourra ensuite ajouter un petit
   bandeau "internship project" et une page `About`
+
+## Troubleshooting
+
+- Si `https://<subdomain>.duckdns.org` negocie bien TLS mais que la page reste
+  bloquee, teste d'abord l'upstream local:
+
+```bash
+curl -sS -D - http://127.0.0.1:8015/ --max-time 10
+curl -sS -D - http://127.0.0.1:8015/api/state --max-time 10
+```
+
+- Si ces deux commandes expirent alors que `systemctl status crypto-mm` est
+  `active (running)`, le process Python est probablement vivant mais l'event
+  loop est monopolise par la boucle websocket. Le symptome observe en avril
+  2026 etait:
+
+```text
+websockets.exceptions.ConnectionClosedError: sent 1011 (internal error) keepalive ping timeout
+```
+
+- Correctif applique:
+  la boucle Coinbase rend maintenant la main a chaque message pour laisser
+  `uvicorn` servir les requetes HTTP sous flux soutenu, et le snapshot dashboard
+  n'attend plus un lock partage avec le traitement du feed.
