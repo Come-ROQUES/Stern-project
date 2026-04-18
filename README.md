@@ -1,11 +1,3 @@
-# Crypto Trading Desk Intern Exercise
-
-Projet Python pour un exercice d'entretien en algo trading crypto.
-
-Le socle reprend des principes d'architecture inspires de FRACTAL, mais sans
-embarquer de logique de strategie proprietaire, d'integration IBKR, de
-workflows internes, ni de donnees confidentielles.
-
 ## Fonctionnalites
 
 - connexion WebSocket publique Coinbase sur `BTC-USD`
