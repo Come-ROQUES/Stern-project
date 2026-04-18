@@ -50,23 +50,25 @@ class MarketMaker:
     def last_vol_bps(self) -> float:
         return self._last_vol_bps
 
-    def update_quote(self, mid_price: float, realized_vol_bps: float = 0.0) -> Quote | None:
+    def update_quote(
+        self, mid_price: float, realized_vol_bps: float = 0.0
+    ) -> Quote | None:
         can_quote, reason = self._risk_limits.can_quote(self._portfolio, mid_price)
         self._risk_status = reason
+        self._last_vol_bps = max(0.0, realized_vol_bps)
         if not can_quote:
             self._last_quote = None
             return None
 
-        # Vol-adaptive spread: widen when realized vol exceeds the base quote.
-        vol_premium_bps = max(
-            0.0,
-            (realized_vol_bps - self._config.base_quote_spread_bps) * self._config.vol_adaptive_gain,
-        )
+        base_bps = self._config.base_quote_spread_bps
+        vol_premium_bps = max(0.0, (self._last_vol_bps - base_bps)) * self._config.vol_adaptive_gain
         vol_premium_bps = min(vol_premium_bps, self._config.vol_adaptive_cap_bps)
-        effective_spread_bps = self._config.base_quote_spread_bps + vol_premium_bps
-        skew_bps = self._portfolio.position_btc * self._config.position_skew_bps_per_btc
+        effective_bps = base_bps + vol_premium_bps
+        self._last_effective_spread_bps = effective_bps
 
-        half_spread = mid_price * (effective_spread_bps / 10_000.0) / 2.0
+        half_spread = mid_price * (effective_bps / 10_000.0) / 2.0
+        skew_bps = self._portfolio.position_btc * self._config.position_skew_bps_per_btc
+        self._last_skew_bps = skew_bps
         skew = mid_price * (skew_bps / 10_000.0)
 
         bid_price = max(0.01, mid_price - half_spread - skew)
@@ -79,9 +81,6 @@ class MarketMaker:
             ts=datetime.now(tz=UTC),
         )
         self._last_quote = quote
-        self._last_effective_spread_bps = effective_spread_bps
-        self._last_skew_bps = skew_bps
-        self._last_vol_bps = realized_vol_bps
         return quote
 
     def maybe_fill(self, trade: PublicTrade) -> SimFill | None:

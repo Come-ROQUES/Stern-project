@@ -1,26 +1,52 @@
+/* V4: Liquid Glass Design System - must be first */
+@import './styles/glass.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   --bg: #060910;
+  --bg-alt: #0d1422;
   --panel: #0d1624;
+  --card: #0c1320;
   --accent: #2ce3ff;
+  --accent-2: #9ca3af;
+  --muted: #94a3b8;
   --text: #e2e8f0;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-}
-
 body {
-  font-family: "IBM Plex Sans", "Inter", system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", "Inter", "Space Grotesk", system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
-  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  /* Mobile bottom nav is fixed; keep content fully visible above it. */
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .app-shell {
+    padding-bottom: 0;
+  }
+}
+
+/* Prevent visual overflow warnings on media tags (Chrome >=108) */
+img,
+video {
+  overflow: clip !important;
+}
+
+/* Plotly canvases occasionally set inline overflow: visible; clamp aggressively.
+   Scoped to .js-plotly-plot only — global canvas rule was clipping
+   lightweight-charts canvases inside overflow-hidden containers. */
+.js-plotly-plot canvas,
+.js-plotly-plot img,
+.js-plotly-plot video {
+  overflow: clip !important;
 }
 
 .mono {
@@ -31,16 +57,35 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.value-dash {
+  color: #94a3b8;
+}
+
+.card,
 .panel {
-  @apply rounded-2xl p-4;
+  @apply rounded-2xl border p-4;
   background: rgba(13, 22, 36, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
   transition: border-color 0.2s ease;
 }
 
+.card:hover,
 .panel:hover {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.glass {
+  background: rgba(10, 14, 25, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.bg-scape {
+  background: radial-gradient(circle at 14% 20%, rgba(44, 227, 255, 0.08), transparent 22%),
+    radial-gradient(circle at 80% 10%, rgba(88, 110, 168, 0.08), transparent 20%),
+    radial-gradient(circle at 60% 76%, rgba(44, 227, 255, 0.04), transparent 28%),
+    var(--bg);
 }
 
 .panel-title {
@@ -57,12 +102,153 @@ body {
   color: rgba(255, 255, 255, 0.45);
 }
 
-.bg-scape {
-  background: radial-gradient(circle at 14% 20%, rgba(44, 227, 255, 0.06), transparent 22%),
-    radial-gradient(circle at 80% 10%, rgba(88, 110, 168, 0.06), transparent 20%),
-    radial-gradient(circle at 60% 76%, rgba(44, 227, 255, 0.04), transparent 28%),
-    var(--bg);
+.panel-value {
+  color: #e5e7eb;
 }
+
+.panel-value.warn {
+  color: #fbbf24;
+}
+
+.panel-value.danger {
+  color: #f87171;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 8px 0;
+}
+
+@keyframes glowPulse {
+  0% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes lineDraw {
+  from {
+    stroke-dashoffset: 120;
+    opacity: 0;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes slowFloat {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0, -6px, 0);
+  }
+
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Mobile optimizations - reduced padding, smaller text */
+@media (max-width: 1023px) {
+  .card, .panel {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .panel-title {
+    font-size: 11px;
+  }
+
+  .panel-label {
+    font-size: 10px;
+  }
+}
+
+/* ============================================================
+   Mobile Navigation Components
+   ============================================================ */
+
+/* Mobile top header bar */
+.mobile-top-bar {
+  background: rgba(6, 9, 16, 0.92);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Mobile bottom nav bar */
+.mobile-bottom-bar {
+  background: rgba(8, 12, 20, 0.94);
+  backdrop-filter: blur(24px) saturate(1.6);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Mobile nav button */
+.mobile-nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  min-width: 56px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Safe area bottom spacer */
+.h-safe-bottom {
+  height: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile bottom sheet */
+.mobile-sheet {
+  border-radius: 24px 24px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  background: rgba(7, 11, 20, 0.97);
+  backdrop-filter: blur(32px) saturate(1.8);
+  box-shadow: 0 -24px 80px rgba(0, 0, 0, 0.6);
+  animation: sheetSlideUp 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.mobile-sheet-backdrop {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes sheetSlideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================================
+   Scrollbar & utility
+   ============================================================ */
 
 .no-scrollbar {
   scrollbar-width: none;
@@ -72,9 +258,58 @@ body {
   display: none;
 }
 
-@media (max-width: 1023px) {
-  .panel {
-    padding: 12px;
-    border-radius: 14px;
-  }
+/* Quant Lab Theme - light research styling */
+.quantlab-theme {
+  --ql-bg: radial-gradient(circle at 15% 20%, rgba(34, 211, 238, 0.14), transparent 26%),
+    radial-gradient(circle at 82% 12%, rgba(99, 102, 241, 0.12), transparent 24%),
+    radial-gradient(circle at 70% 78%, rgba(16, 185, 129, 0.08), transparent 32%),
+    #f5f7fb;
+  --ql-card: rgba(255, 255, 255, 0.86);
+  --ql-border: rgba(15, 23, 42, 0.08);
+  --ql-shadow: 0 18px 60px rgba(15, 23, 42, 0.12);
+  --ql-accent: #0ea5e9;
+  --ql-accent-2: #00FF88;
+  --ql-text: #0f172a;
+  --ql-muted: #475569;
+  background: var(--ql-bg);
+  color: var(--ql-text);
+}
+
+.quant-card {
+  border-radius: 18px;
+  border: 1px solid var(--ql-border);
+  background: var(--ql-card);
+  box-shadow: var(--ql-shadow);
+  transition: border-color 0.2s ease;
+}
+
+.quant-card:hover {
+  border-color: rgba(14, 165, 233, 0.24);
+}
+
+.quant-section-title {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ql-muted);
+}
+
+.quant-pill {
+  border-radius: 9999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(99, 102, 241, 0.08));
+  color: var(--ql-text);
+  font-variant-numeric: tabular-nums;
+  padding: 6px 12px;
+}
+
+.quant-toolbar {
+  position: sticky;
+  top: 12px;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
 }

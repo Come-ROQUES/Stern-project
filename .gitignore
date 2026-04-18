@@ -17,3 +17,4 @@ coverage.xml
 htmlcov/
 _backups/
 .DS_Store
+.vscode/

@@ -115,6 +115,15 @@ class MarketDataService:
         self.spread_tracker.record(spreads)
         self._record_live_snapshots(mid=mid, quote_active=quote is not None)
 
+    def _realized_vol_bps(self) -> float:
+        mid_values = [float(point["mid_price"]) for point in list(self.mid_history)[-60:]]
+        if len(mid_values) < 2:
+            return 0.0
+        returns = _returns_bps(mid_values)
+        if not returns:
+            return 0.0
+        return sqrt(mean(ret * ret for ret in returns))
+
     def _handle_l2_message(self, message: dict[str, object]) -> None:
         events = message.get("events", [])
         if not isinstance(events, list):
@@ -289,13 +298,6 @@ class MarketDataService:
                 "max_loss": self._settings.max_loss,
             },
         }
-
-    def _realized_vol_bps(self) -> float:
-        mid_values = [float(point["mid_price"]) for point in self.mid_history]
-        returns = _returns_bps(mid_values[-60:])
-        if not returns:
-            return 0.0
-        return sqrt(mean([ret * ret for ret in returns]))
 
     def _quant_lab_snapshot(
         self,

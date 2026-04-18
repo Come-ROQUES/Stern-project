@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await task
 
 
-app = FastAPI(title="Stern Crypto Desk", lifespan=lifespan)
+app = FastAPI(title="Fractal Crypto Desk", lifespan=lifespan)
 
 
 @app.get("/api/state")
@@ -42,78 +42,68 @@ async def api_state() -> dict[str, object]:
 
 
 @app.get("/api/export/fills.csv")
-async def export_fills() -> StreamingResponse:
-    fills = list(service.simulated_fills)
-    columns = ["ts", "side", "price", "size", "notional_usd", "reason"]
+async def export_fills_csv() -> StreamingResponse:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(columns)
-    for fill in fills:
+    writer.writerow(["ts", "side", "price", "size", "notional_usd", "reason"])
+    for fill in list(service.simulated_fills):
         price = float(fill["price"])
         size = float(fill["size"])
         writer.writerow(
             [
-                fill["ts"],
-                fill["side"],
-                f"{price:.2f}",
-                f"{size:.8f}",
-                f"{price * size:.2f}",
-                fill["reason"],
+                fill.get("ts", ""),
+                fill.get("side", ""),
+                price,
+                size,
+                price * size,
+                fill.get("reason", ""),
             ]
         )
-    return _csv_response(buffer, filename=f"fills_{_stamp()}.csv")
+    return _csv_response(buffer, f"fills_{_stamp()}.csv")
 
 
 @app.get("/api/export/pnl.csv")
-async def export_pnl() -> StreamingResponse:
-    history = list(service.portfolio_history)
-    columns = ["ts", "equity_usd", "position_btc", "total_pnl_usd"]
+async def export_pnl_csv() -> StreamingResponse:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(columns)
-    for point in history:
+    writer.writerow(["ts", "equity_usd", "position_btc", "total_pnl_usd"])
+    for point in list(service.portfolio_history):
         writer.writerow(
             [
-                point["ts"],
-                f"{float(point['equity']):.2f}",
-                f"{float(point['position_btc']):.8f}",
-                f"{float(point['total_pnl']):.2f}",
+                point.get("ts", ""),
+                float(point.get("equity", 0.0)),
+                float(point.get("position_btc", 0.0)),
+                float(point.get("total_pnl", 0.0)),
             ]
         )
-    return _csv_response(buffer, filename=f"pnl_{_stamp()}.csv")
+    return _csv_response(buffer, f"pnl_{_stamp()}.csv")
 
 
 @app.get("/api/export/spreads.csv")
-async def export_spreads() -> StreamingResponse:
-    history = service.spread_tracker.tail(points=2_000)
-    sizes = list(history.keys())
-    columns = ["sample_index", *sizes]
-    series_lengths = [len(history[size]) for size in sizes]
-    max_len = max(series_lengths) if series_lengths else 0
+async def export_spreads_csv() -> StreamingResponse:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(columns)
-    for idx in range(max_len):
-        row: list[str] = [str(idx)]
-        for size in sizes:
-            values = history[size]
-            offset = max_len - len(values)
-            if idx < offset:
-                row.append("")
-            else:
-                row.append(f"{values[idx - offset]:.4f}")
-        writer.writerow(row)
-    return _csv_response(buffer, filename=f"spreads_{_stamp()}.csv")
+    depths = ["0.1 BTC", "1 BTC", "5 BTC", "10 BTC"]
+    writer.writerow(["sample_index", *depths])
+    history = service.spread_tracker.tail()
+    if isinstance(history, dict):
+        series = {depth: list(history.get(depth, [])) for depth in depths}
+        max_len = max((len(values) for values in series.values()), default=0)
+        for index in range(max_len):
+            row: list[object] = [index]
+            for depth in depths:
+                values = series[depth]
+                row.append(values[index] if index < len(values) else "")
+            writer.writerow(row)
+    return _csv_response(buffer, f"spreads_{_stamp()}.csv")
 
 
-def _csv_response(buffer: io.StringIO, *, filename: str) -> StreamingResponse:
+def _csv_response(buffer: io.StringIO, filename: str) -> StreamingResponse:
     buffer.seek(0)
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
-        "Cache-Control": "no-store, max-age=0",
-    }
     return StreamingResponse(
-        iter([buffer.getvalue()]), media_type="text/csv; charset=utf-8", headers=headers
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -155,23 +145,42 @@ def _fallback_html() -> str:
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Stern Crypto Desk</title>
+    <title>Fractal Crypto Desk</title>
     <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
-        background: #050510; color: #e8ebe8;
-        font-family: "IBM Plex Sans", system-ui, sans-serif; }
-      article { max-width: 720px; padding: 32px; border-radius: 20px;
-        border: 1px solid rgba(0,255,136,0.12); background: rgba(10,14,24,0.92);
-        box-shadow: 0 18px 40px rgba(0,0,0,0.35); }
-      h1 { margin: 0 0 12px; letter-spacing: -0.04em; }
-      p { color: #8a918a; line-height: 1.6; }
-      code { color: #2ce3ff; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #050510;
+        color: #e8ebe8;
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+      }
+      article {
+        max-width: 720px;
+        padding: 32px;
+        border-radius: 20px;
+        border: 1px solid rgba(0,255,136,0.12);
+        background: rgba(10,14,24,0.92);
+        box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+      }
+      h1 {
+        margin: 0 0 12px;
+        letter-spacing: -0.04em;
+      }
+      p {
+        color: #8a918a;
+        line-height: 1.6;
+      }
+      code {
+        color: #2ce3ff;
+      }
     </style>
   </head>
   <body>
     <article>
       <h1>Frontend build missing</h1>
-      <p>Run <code>npm --prefix frontend install</code> then <code>npm --prefix frontend run build</code>.</p>
+      <p>The React cockpit is not built yet. Run <code>npm --prefix frontend install</code> then <code>npm --prefix frontend run build</code>.</p>
     </article>
   </body>
 </html>
