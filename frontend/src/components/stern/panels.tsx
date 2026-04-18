@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   createChart,
+  LineStyle,
+  type AreaData,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
@@ -112,152 +114,576 @@ function sign(value: number): "positive" | "negative" | "neutral" {
 }
 
 // ============================================================================
-// Overview — top KPIs for the crypto MM desk
+// Overview — hero equity curve + click-to-expand KPI cards
 // ============================================================================
+
+function DetailRow({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: "positive" | "negative" | "neutral";
+}) {
+  const color =
+    accent === "positive"
+      ? "text-emerald-300"
+      : accent === "negative"
+        ? "text-rose-300"
+        : "text-neutral-200";
+  return (
+    <div className="flex items-baseline justify-between">
+      <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+        {label}
+      </span>
+      <span className={`font-mono tabular-nums ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      className={`transition-transform duration-200 text-neutral-500 ${expanded ? "rotate-180" : ""}`}
+      aria-hidden
+    >
+      <path
+        d="M2 4l3 3 3-3"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ExpandableKpiCard({
+  id,
+  label,
+  value,
+  accent,
+  expanded,
+  onToggle,
+  details,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  accent?: "positive" | "negative" | "neutral";
+  expanded: boolean;
+  onToggle: (id: string) => void;
+  details: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(id)}
+      aria-expanded={expanded}
+      className={`glass-panel p-4 text-left transition-[grid-column,border-color,background] duration-200 border border-transparent hover:border-neutral-400/30 hover:bg-white/[0.02] focus:outline-none focus:border-cyan-400/40 ${
+        expanded ? "lg:col-span-2 border-neutral-400/25 bg-white/[0.015]" : ""
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <Kpi label={label} value={value} accent={accent} />
+        <ChevronIcon expanded={expanded} />
+      </div>
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-neutral-500/20 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+          {details}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function EquityCurveHero({
+  equityCurve,
+  peakEquity,
+  currentEquity,
+  returnPct,
+  drawdownUsd,
+}: {
+  equityCurve: number[];
+  peakEquity: number;
+  currentEquity: number;
+  returnPct: number;
+  drawdownUsd: number;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const startLineRef = useRef<IPriceLine | null>(null);
+  const peakLineRef = useRef<IPriceLine | null>(null);
+
+  const startingEquity =
+    equityCurve.length > 0 ? equityCurve[0] : currentEquity;
+  const bullish = currentEquity >= startingEquity;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: 220,
+      layout: {
+        background: { color: "transparent" },
+        textColor: "#a1a1aa",
+        fontFamily:
+          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: "rgba(82, 82, 91, 0.12)" },
+        horzLines: { color: "rgba(82, 82, 91, 0.12)" },
+      },
+      timeScale: {
+        visible: false,
+        borderVisible: false,
+      },
+      rightPriceScale: {
+        borderColor: "rgba(82, 82, 91, 0.3)",
+        scaleMargins: { top: 0.12, bottom: 0.08 },
+      },
+      crosshair: {
+        mode: 0,
+        vertLine: { visible: false },
+        horzLine: {
+          color: "rgba(148, 163, 184, 0.35)",
+          width: 1,
+          style: LineStyle.Dashed,
+          labelBackgroundColor: "rgba(30, 41, 59, 0.9)",
+        },
+      },
+      handleScroll: false,
+      handleScale: false,
+    });
+    const series = chart.addAreaSeries({
+      lineColor: "#22c55e",
+      topColor: "rgba(34, 197, 94, 0.35)",
+      bottomColor: "rgba(34, 197, 94, 0.02)",
+      lineWidth: 2,
+      priceLineVisible: true,
+      priceLineColor: "rgba(148, 163, 184, 0.5)",
+      priceLineStyle: LineStyle.Dashed,
+      priceLineWidth: 1,
+      lastValueVisible: true,
+      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+    });
+    chartRef.current = chart;
+    seriesRef.current = series;
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        chart.applyOptions({ width: Math.max(1, Math.floor(entry.contentRect.width)) });
+      }
+    });
+    ro.observe(container);
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+      startLineRef.current = null;
+      peakLineRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !chart) return;
+    const data: AreaData<UTCTimestamp>[] = equityCurve.map((v, i) => ({
+      time: (i + 1) as UTCTimestamp,
+      value: v,
+    }));
+    series.setData(data);
+    series.applyOptions({
+      lineColor: bullish ? "#22c55e" : "#ef4444",
+      topColor: bullish
+        ? "rgba(34, 197, 94, 0.35)"
+        : "rgba(239, 68, 68, 0.3)",
+      bottomColor: bullish
+        ? "rgba(34, 197, 94, 0.02)"
+        : "rgba(239, 68, 68, 0.02)",
+    });
+    if (data.length > 1) chart.timeScale().fitContent();
+  }, [equityCurve, bullish]);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    const sync = (
+      ref: React.MutableRefObject<IPriceLine | null>,
+      price: number | null,
+      color: string,
+      title: string,
+    ) => {
+      if (price == null || !Number.isFinite(price)) {
+        if (ref.current) {
+          series.removePriceLine(ref.current);
+          ref.current = null;
+        }
+        return;
+      }
+      if (ref.current) {
+        ref.current.applyOptions({ price });
+      } else {
+        ref.current = series.createPriceLine({
+          price,
+          color,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title,
+        });
+      }
+    };
+    sync(
+      startLineRef,
+      Number.isFinite(startingEquity) ? startingEquity : null,
+      "rgba(148, 163, 184, 0.55)",
+      "start",
+    );
+    sync(
+      peakLineRef,
+      peakEquity > 0 && peakEquity !== startingEquity ? peakEquity : null,
+      "rgba(250, 204, 21, 0.5)",
+      "peak",
+    );
+  }, [startingEquity, peakEquity]);
+
+  const change = currentEquity - startingEquity;
+  const hasData = equityCurve.length >= 2;
+
+  return (
+    <Panel
+      title="Equity Curve"
+      subtitle="Paper session · cash + mark-to-market portfolio value"
+    >
+      <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-xs font-mono">
+        <span className="text-neutral-500">
+          Equity{" "}
+          <span className="text-neutral-100">
+            {formatUsd(currentEquity, 2)}
+          </span>
+        </span>
+        <span className={change >= 0 ? "text-emerald-300" : "text-rose-300"}>
+          {change >= 0 ? "+" : ""}
+          {formatUsd(change, 2)} ({returnPct >= 0 ? "+" : ""}
+          {returnPct.toFixed(3)}%)
+        </span>
+        <span className="text-neutral-500">
+          Peak{" "}
+          <span className="text-amber-300">{formatUsd(peakEquity, 2)}</span>
+        </span>
+        <span className="text-neutral-500">
+          Drawdown{" "}
+          <span className="text-rose-300">{formatUsd(drawdownUsd, 2)}</span>
+        </span>
+      </div>
+      {hasData ? (
+        <div ref={containerRef} className="w-full h-[220px]" />
+      ) : (
+        <div className="h-[220px] flex items-center justify-center text-sm text-neutral-500">
+          Warming up equity samples…
+        </div>
+      )}
+    </Panel>
+  );
+}
 
 export function OverviewPanel() {
   const { data: state } = useSternState();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = (id: string) =>
+    setExpanded((prev) => (prev === id ? null : id));
+
   const portfolio = state?.portfolio;
   const strategy = state?.strategy;
+  const backtest = state?.backtest_lite;
+  const quote = state?.quote;
+
   const totalPnl = portfolio
     ? portfolio.realized_pnl + portfolio.unrealized_pnl
     : 0;
+  const spreadUsd =
+    state?.best_bid && state?.best_ask
+      ? state.best_ask.price - state.best_bid.price
+      : null;
+  const spreadBps =
+    spreadUsd != null && state?.mid_price
+      ? (spreadUsd / state.mid_price) * 10000
+      : null;
+
+  const startingEquity = backtest?.equity_curve?.[0] ?? portfolio?.equity ?? 0;
+  const peakEquity = backtest?.peak_equity_usd ?? portfolio?.equity ?? 0;
+  const returnPct = backtest?.paper_return_pct ?? 0;
+  const maxDrawdown = backtest?.max_drawdown_usd ?? portfolio?.drawdown ?? 0;
 
   return (
     <div className="p-6 space-y-4">
       <PanelHeader
         title="Crypto MM Overview"
-        subtitle="BTC-USD paper market making — top-of-book, quote state, PnL"
+        subtitle="BTC-USD paper market making — click any card to expand"
         state={state}
       />
 
+      <EquityCurveHero
+        equityCurve={backtest?.equity_curve ?? []}
+        peakEquity={peakEquity}
+        currentEquity={portfolio?.equity ?? 0}
+        returnPct={returnPct}
+        drawdownUsd={portfolio?.drawdown ?? 0}
+      />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Panel>
-          <Kpi
-            label="Mid"
-            value={formatUsd(state?.mid_price, 2)}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Best Bid / Ask"
-            value={
-              state?.best_bid && state?.best_ask
-                ? `${formatNumber(state.best_bid.price, 2)} / ${formatNumber(state.best_ask.price, 2)}`
-                : "—"
-            }
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Spread"
-            value={
-              state?.best_bid && state?.best_ask
-                ? formatUsd(state.best_ask.price - state.best_bid.price, 2)
-                : "—"
-            }
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Position"
-            value={formatBtc(portfolio?.position_btc ?? 0, 4)}
-            accent={portfolio ? sign(portfolio.position_btc) : "neutral"}
-          />
-        </Panel>
+        <ExpandableKpiCard
+          id="mid"
+          label="Mid"
+          value={formatUsd(state?.mid_price, 2)}
+          expanded={expanded === "mid"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Best bid"
+                value={formatUsd(state?.best_bid?.price, 2)}
+                accent="positive"
+              />
+              <DetailRow
+                label="Best ask"
+                value={formatUsd(state?.best_ask?.price, 2)}
+                accent="negative"
+              />
+              <DetailRow
+                label="Bid size"
+                value={formatBtc(state?.best_bid?.size ?? 0, 4)}
+              />
+              <DetailRow
+                label="Ask size"
+                value={formatBtc(state?.best_ask?.size ?? 0, 4)}
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="spread"
+          label="Top Spread"
+          value={spreadUsd != null ? formatUsd(spreadUsd, 2) : "—"}
+          expanded={expanded === "spread"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Spread bps"
+                value={spreadBps != null ? `${spreadBps.toFixed(2)} bps` : "—"}
+              />
+              <DetailRow
+                label="MM effective"
+                value={formatBps(strategy?.effective_spread_bps)}
+              />
+              <DetailRow label="Skew" value={formatBps(strategy?.skew_bps)} />
+              <DetailRow
+                label="Vol input"
+                value={formatBps(strategy?.vol_input_bps)}
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="position"
+          label="Position"
+          value={formatBtc(portfolio?.position_btc ?? 0, 4)}
+          accent={portfolio ? sign(portfolio.position_btc) : "neutral"}
+          expanded={expanded === "position"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Avg entry"
+                value={formatUsd(portfolio?.avg_entry_price, 2)}
+              />
+              <DetailRow
+                label="Exposure"
+                value={formatUsd(portfolio?.exposure_usd, 2)}
+              />
+              <DetailRow
+                label="Cash"
+                value={formatUsd(portfolio?.cash, 2)}
+              />
+              <DetailRow
+                label="Unrealized"
+                value={formatUsd(portfolio?.unrealized_pnl, 2)}
+                accent={portfolio ? sign(portfolio.unrealized_pnl) : "neutral"}
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="pnl"
+          label="Total PnL"
+          value={formatUsd(totalPnl, 2)}
+          accent={sign(totalPnl)}
+          expanded={expanded === "pnl"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Realized"
+                value={formatUsd(portfolio?.realized_pnl, 2)}
+                accent={portfolio ? sign(portfolio.realized_pnl) : "neutral"}
+              />
+              <DetailRow
+                label="Unrealized"
+                value={formatUsd(portfolio?.unrealized_pnl, 2)}
+                accent={portfolio ? sign(portfolio.unrealized_pnl) : "neutral"}
+              />
+              <DetailRow
+                label="Return"
+                value={formatPct(returnPct / 100, 3)}
+                accent={sign(returnPct)}
+              />
+              <DetailRow
+                label="Max DD"
+                value={formatUsd(maxDrawdown, 2)}
+                accent="negative"
+              />
+            </>
+          }
+        />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Panel>
-          <Kpi
-            label="Equity"
-            value={formatUsd(portfolio?.equity, 2)}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Exposure"
-            value={formatUsd(portfolio?.exposure_usd, 2)}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Realized PnL"
-            value={formatUsd(portfolio?.realized_pnl, 2)}
-            accent={portfolio ? sign(portfolio.realized_pnl) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Total PnL"
-            value={formatUsd(totalPnl, 2)}
-            accent={sign(totalPnl)}
-          />
-        </Panel>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Panel title="Current quote" subtitle="Post-risk market maker output">
-          {state?.quote ? (
-            <div className="grid grid-cols-2 gap-3 text-sm font-mono">
-              <div>
-                <div className="text-neutral-500 text-xs mb-1">Bid</div>
-                <div className="text-emerald-300">
-                  {formatUsd(state.quote.bid_price, 2)} ·{" "}
-                  {state.quote.bid_size.toFixed(4)} BTC
-                </div>
-              </div>
-              <div>
-                <div className="text-neutral-500 text-xs mb-1">Ask</div>
-                <div className="text-rose-300">
-                  {formatUsd(state.quote.ask_price, 2)} ·{" "}
-                  {state.quote.ask_size.toFixed(4)} BTC
-                </div>
-              </div>
-              <div>
-                <div className="text-neutral-500 text-xs mb-1">Effective spread</div>
-                <div>{formatBps(strategy?.effective_spread_bps)}</div>
-              </div>
-              <div>
-                <div className="text-neutral-500 text-xs mb-1">Skew</div>
-                <div>{formatBps(strategy?.skew_bps)}</div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-sm text-neutral-500 py-6 text-center">
-              Quote inactive — risk: {state?.risk_status ?? "warming"}
-            </div>
-          )}
-        </Panel>
-
-        <Panel title="Risk" subtitle="Limits & session status">
-          <div className="space-y-2 text-sm font-mono">
-            <div className="flex justify-between">
-              <span className="text-neutral-500">Status</span>
-              <span
-                className={
-                  state?.risk_status === "ok"
-                    ? "text-emerald-300"
-                    : "text-amber-300"
+        <ExpandableKpiCard
+          id="equity"
+          label="Equity"
+          value={formatUsd(portfolio?.equity, 2)}
+          expanded={expanded === "equity"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Starting"
+                value={formatUsd(startingEquity, 2)}
+              />
+              <DetailRow
+                label="Peak"
+                value={formatUsd(peakEquity, 2)}
+              />
+              <DetailRow
+                label="Drawdown"
+                value={formatUsd(portfolio?.drawdown, 2)}
+                accent="negative"
+              />
+              <DetailRow
+                label="Return"
+                value={formatPct(returnPct / 100, 3)}
+                accent={sign(returnPct)}
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="fills"
+          label="Fill Count"
+          value={String(backtest?.fill_count ?? strategy?.fill_count ?? 0)}
+          expanded={expanded === "fills"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Volume"
+                value={formatBtc(backtest?.fill_volume_btc ?? 0, 4)}
+              />
+              <DetailRow
+                label="Notional"
+                value={formatUsd(backtest?.fill_notional_usd ?? 0, 2)}
+              />
+              <DetailRow
+                label="Avg fill"
+                value={formatUsd(strategy?.avg_fill_notional ?? 0, 2)}
+              />
+              <DetailRow
+                label="Uptime"
+                value={
+                  backtest
+                    ? `${backtest.quote_uptime_pct.toFixed(1)}%`
+                    : "—"
                 }
-              >
-                {state?.risk_status ?? "—"}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-neutral-500">Max notional</span>
-              <span>{formatUsd(strategy?.config.max_notional_exposure, 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-neutral-500">Max loss</span>
-              <span>{formatUsd(strategy?.config.max_loss, 0)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-neutral-500">Drawdown</span>
-              <span>{formatUsd(portfolio?.drawdown, 2)}</span>
-            </div>
-          </div>
-        </Panel>
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="quote"
+          label="MM Quote"
+          value={
+            quote
+              ? `${formatNumber(quote.bid_price, 2)} / ${formatNumber(quote.ask_price, 2)}`
+              : "inactive"
+          }
+          accent={quote ? "neutral" : "negative"}
+          expanded={expanded === "quote"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Bid size"
+                value={quote ? formatBtc(quote.bid_size, 4) : "—"}
+                accent="positive"
+              />
+              <DetailRow
+                label="Ask size"
+                value={quote ? formatBtc(quote.ask_size, 4) : "—"}
+                accent="negative"
+              />
+              <DetailRow
+                label="Eff. spread"
+                value={formatBps(strategy?.effective_spread_bps)}
+              />
+              <DetailRow
+                label="Mode"
+                value={strategy?.mode ?? "—"}
+              />
+            </>
+          }
+        />
+        <ExpandableKpiCard
+          id="risk"
+          label="Risk"
+          value={state?.risk_status ?? "—"}
+          accent={state?.risk_status === "ok" ? "positive" : "negative"}
+          expanded={expanded === "risk"}
+          onToggle={toggle}
+          details={
+            <>
+              <DetailRow
+                label="Max notional"
+                value={formatUsd(strategy?.config.max_notional_exposure, 0)}
+              />
+              <DetailRow
+                label="Max loss"
+                value={formatUsd(strategy?.config.max_loss, 0)}
+              />
+              <DetailRow
+                label="Drawdown"
+                value={formatUsd(portfolio?.drawdown, 2)}
+                accent="negative"
+              />
+              <DetailRow
+                label="Max DD"
+                value={formatUsd(maxDrawdown, 2)}
+                accent="negative"
+              />
+            </>
+          }
+        />
       </div>
     </div>
   );
@@ -267,51 +693,253 @@ export function OverviewPanel() {
 // Pro Terminal — orderbook + tape + spread metrics
 // ============================================================================
 
-function BookSide({
-  levels,
+const LADDER_DEPTH = 10;
+const IMBALANCE_TOP_N = 5;
+
+type LadderRung = {
+  price: number;
+  size: number;
+  cum: number;
+};
+
+function buildRungs(levels: BookLevel[]): LadderRung[] {
+  const rungs: LadderRung[] = [];
+  let cum = 0;
+  for (let i = 0; i < Math.min(levels.length, LADDER_DEPTH); i++) {
+    const lvl = levels[i];
+    cum += lvl.size;
+    rungs.push({ price: lvl.price, size: lvl.size, cum });
+  }
+  return rungs;
+}
+
+function Rung({
+  rung,
   side,
+  maxSize,
+  maxCum,
+  isBest,
 }: {
-  levels: BookLevel[];
+  rung: LadderRung | null;
   side: "bid" | "ask";
+  maxSize: number;
+  maxCum: number;
+  isBest: boolean;
 }) {
-  const maxSize = useMemo(
-    () => Math.max(1e-9, ...levels.map((l) => l.size)),
-    [levels],
-  );
-  const color = side === "bid" ? "bg-emerald-500/15" : "bg-rose-500/15";
-  const priceColor = side === "bid" ? "text-emerald-300" : "text-rose-300";
+  const sizePct = rung ? (rung.size / maxSize) * 100 : 0;
+  const cumPct = rung ? (rung.cum / maxCum) * 100 : 0;
+  const isBid = side === "bid";
+  const priceColor = isBid ? "text-emerald-300" : "text-rose-300";
+  const depthBg = isBid ? "bg-emerald-500/15" : "bg-rose-500/15";
+  const cumBg = isBid ? "bg-emerald-400/40" : "bg-rose-400/40";
+  const bestRing = isBest
+    ? isBid
+      ? "ring-1 ring-inset ring-emerald-400/50"
+      : "ring-1 ring-inset ring-rose-400/50"
+    : "";
+
+  // Layout: bid puts size on the LEFT, price in the MIDDLE; ask mirrors.
   return (
-    <table className="glass-table w-full text-xs font-mono">
-      <thead>
-        <tr>
-          <th className="text-left">Price</th>
-          <th className="text-right">Size</th>
-        </tr>
-      </thead>
-      <tbody>
-        {levels.map((level, idx) => {
-          const pct = (level.size / maxSize) * 100;
-          return (
-            <tr key={`${side}-${idx}`} className="relative">
-              <td className={priceColor}>
-                <div className="relative">
-                  <div
-                    className={`absolute inset-0 ${color}`}
-                    style={{
-                      width: `${pct}%`,
-                      [side === "bid" ? "right" : "left"]: 0,
-                      left: side === "bid" ? "auto" : 0,
-                    }}
-                  />
-                  <span className="relative">{formatNumber(level.price, 2)}</span>
-                </div>
-              </td>
-              <td className="text-right">{level.size.toFixed(4)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div
+      className={`relative grid grid-cols-[1fr_auto_1fr] items-center h-[22px] px-1 text-xs font-mono ${bestRing}`}
+    >
+      {/* Depth bar: grows from the price axis toward the outer edge */}
+      {rung && (
+        <div
+          className={`absolute top-0 bottom-0 ${depthBg} pointer-events-none`}
+          style={{
+            width: `calc(${sizePct / 2}% )`,
+            [isBid ? "right" : "left"]: "50%",
+          }}
+        />
+      )}
+      {/* Cumulative depth tick: thin outer rail */}
+      {rung && (
+        <div
+          className={`absolute top-0 bottom-0 ${cumBg} pointer-events-none`}
+          style={{
+            width: "2px",
+            [isBid ? "left" : "right"]: `calc(50% - ${cumPct / 2}%)`,
+          }}
+        />
+      )}
+      {/* Left slot: size (bid only) */}
+      <span className="relative text-left text-neutral-300 pl-1">
+        {isBid && rung ? rung.size.toFixed(4) : ""}
+      </span>
+      {/* Center: price */}
+      <span className={`relative px-2 ${priceColor} tabular-nums`}>
+        {rung ? formatNumber(rung.price, 2) : "—"}
+      </span>
+      {/* Right slot: size (ask only) */}
+      <span className="relative text-right text-neutral-300 pr-1">
+        {!isBid && rung ? rung.size.toFixed(4) : ""}
+      </span>
+    </div>
+  );
+}
+
+function L2Ladder({ state }: { state: SternState | null }) {
+  const bids = state?.book.bids ?? [];
+  const asks = state?.book.asks ?? [];
+
+  const bidRungs = useMemo(() => buildRungs(bids), [bids]);
+  const askRungs = useMemo(() => buildRungs(asks), [asks]);
+
+  const { maxSize, maxCum } = useMemo(() => {
+    let ms = 1e-9;
+    let mc = 1e-9;
+    for (const r of bidRungs) {
+      if (r.size > ms) ms = r.size;
+      if (r.cum > mc) mc = r.cum;
+    }
+    for (const r of askRungs) {
+      if (r.size > ms) ms = r.size;
+      if (r.cum > mc) mc = r.cum;
+    }
+    return { maxSize: ms, maxCum: mc };
+  }, [bidRungs, askRungs]);
+
+  const bestBid = state?.best_bid ?? null;
+  const bestAsk = state?.best_ask ?? null;
+  const mid =
+    bestBid && bestAsk ? (bestBid.price + bestAsk.price) / 2 : null;
+  const spread =
+    bestBid && bestAsk ? bestAsk.price - bestBid.price : null;
+  const spreadBps = mid && spread ? (spread / mid) * 10000 : null;
+
+  const imbalance = useMemo(() => {
+    let bidVol = 0;
+    let askVol = 0;
+    for (let i = 0; i < Math.min(IMBALANCE_TOP_N, bidRungs.length); i++) {
+      bidVol += bidRungs[i].size;
+    }
+    for (let i = 0; i < Math.min(IMBALANCE_TOP_N, askRungs.length); i++) {
+      askVol += askRungs[i].size;
+    }
+    const total = bidVol + askVol;
+    const ratio = total > 0 ? (bidVol - askVol) / total : 0;
+    return { bidVol, askVol, ratio };
+  }, [bidRungs, askRungs]);
+
+  // Pad to fixed depth so rows don't jitter when book shrinks.
+  const askRows = Array.from(
+    { length: LADDER_DEPTH },
+    (_, i) => askRungs[i] ?? null,
+  ).reverse(); // best ask at bottom, closest to mid ribbon
+  const bidRows = Array.from(
+    { length: LADDER_DEPTH },
+    (_, i) => bidRungs[i] ?? null,
+  );
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Column headers */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center px-1 pb-1 text-[10px] uppercase tracking-wider text-neutral-500">
+        <span className="text-left pl-1">Bid Size</span>
+        <span className="px-2">Price</span>
+        <span className="text-right pr-1">Ask Size</span>
+      </div>
+
+      {/* Asks (top N, reversed) */}
+      <div>
+        {askRows.map((r, i) => (
+          <Rung
+            key={`a-${i}`}
+            rung={r}
+            side="ask"
+            maxSize={maxSize}
+            maxCum={maxCum}
+            isBest={r != null && bestAsk != null && r.price === bestAsk.price}
+          />
+        ))}
+      </div>
+
+      {/* Mid / spread ribbon */}
+      <div className="my-1 grid grid-cols-3 items-center px-1 py-1.5 rounded bg-neutral-500/5 border-y border-neutral-500/15 text-xs font-mono">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+          Mid
+        </span>
+        <span className="text-center text-neutral-100 tabular-nums">
+          {mid != null ? formatUsd(mid, 2) : "—"}
+        </span>
+        <span className="text-right text-neutral-400 tabular-nums">
+          {spread != null ? formatUsd(spread, 2) : "—"}
+          {spreadBps != null && (
+            <span className="ml-1.5 text-[10px] text-neutral-500">
+              {spreadBps.toFixed(2)} bps
+            </span>
+          )}
+        </span>
+      </div>
+
+      {/* Bids */}
+      <div>
+        {bidRows.map((r, i) => (
+          <Rung
+            key={`b-${i}`}
+            rung={r}
+            side="bid"
+            maxSize={maxSize}
+            maxCum={maxCum}
+            isBest={r != null && bestBid != null && r.price === bestBid.price}
+          />
+        ))}
+      </div>
+
+      {/* Imbalance footer */}
+      <ImbalanceBar
+        bidVol={imbalance.bidVol}
+        askVol={imbalance.askVol}
+        ratio={imbalance.ratio}
+      />
+    </div>
+  );
+}
+
+function ImbalanceBar({
+  bidVol,
+  askVol,
+  ratio,
+}: {
+  bidVol: number;
+  askVol: number;
+  ratio: number;
+}) {
+  const total = bidVol + askVol;
+  const bidPct = total > 0 ? (bidVol / total) * 100 : 50;
+  const skewLabel =
+    ratio > 0.05 ? "bid-heavy" : ratio < -0.05 ? "ask-heavy" : "balanced";
+  const skewColor =
+    ratio > 0.05
+      ? "text-emerald-300"
+      : ratio < -0.05
+        ? "text-rose-300"
+        : "text-neutral-400";
+  return (
+    <div className="mt-3 pt-3 border-t border-neutral-500/15">
+      <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+        <span>Imbalance · top {IMBALANCE_TOP_N}</span>
+        <span className={`font-mono normal-case tracking-normal ${skewColor}`}>
+          {(ratio * 100).toFixed(1)}% · {skewLabel}
+        </span>
+      </div>
+      <div className="relative h-1.5 rounded-sm overflow-hidden bg-neutral-500/10">
+        <div
+          className="absolute inset-y-0 left-0 bg-emerald-500/60"
+          style={{ width: `${bidPct}%` }}
+        />
+        <div
+          className="absolute inset-y-0 right-0 bg-rose-500/60"
+          style={{ width: `${100 - bidPct}%` }}
+        />
+        <div className="absolute inset-y-0 left-1/2 w-px bg-neutral-200/50" />
+      </div>
+      <div className="flex items-center justify-between mt-1 text-[11px] font-mono text-neutral-400 tabular-nums">
+        <span>{bidVol.toFixed(4)} BTC</span>
+        <span>{askVol.toFixed(4)} BTC</span>
+      </div>
+    </div>
   );
 }
 
@@ -392,15 +1020,15 @@ export function ProTerminalPanel() {
         subtitle="Live L2 orderbook, tape and depth-weighted spread analytics"
         state={state}
       />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Panel title="Bids (top 10)">
-          <BookSide levels={state?.book.bids ?? []} side="bid" />
-        </Panel>
-        <Panel title="Asks (top 10)">
-          <BookSide levels={state?.book.asks ?? []} side="ask" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <Panel
+          title="L2 Order Book"
+          subtitle={`Top ${LADDER_DEPTH} each side · cumulative depth · imbalance top ${IMBALANCE_TOP_N}`}
+        >
+          <L2Ladder state={state ?? null} />
         </Panel>
         <Panel title="Tape" subtitle="Latest 40 public trades">
-          <div className="glass-scroll max-h-[420px] overflow-auto">
+          <div className="glass-scroll max-h-[520px] overflow-auto">
             <TradeTape trades={state?.recent_trades ?? []} />
           </div>
         </Panel>
@@ -452,23 +1080,34 @@ function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<
   return order.map((b) => buckets.get(b)!);
 }
 
-function buildFillMarkers(fills: SimFill[], bucketSec: number): SeriesMarker<Time>[] {
+const MIN_MARKER_SIZE = 0.005;
+const MAX_MARKERS = 20;
+
+function buildFillMarkers(
+  fills: SimFill[],
+  bucketSec: number,
+  firstBucket: number | null,
+  lastBucket: number | null,
+): SeriesMarker<Time>[] {
+  if (firstBucket == null || lastBucket == null) return [];
   const out: SeriesMarker<Time>[] = [];
-  for (const fill of fills.slice(0, 60)) {
+  for (const fill of fills) {
+    if (Math.abs(fill.size) < MIN_MARKER_SIZE) continue;
     const ms = Date.parse(fill.ts);
     if (!Number.isFinite(ms)) continue;
     const t = Math.floor(ms / 1000);
     const bucket = Math.floor(t / bucketSec) * bucketSec;
+    if (bucket < firstBucket || bucket > lastBucket) continue;
     out.push({
       time: bucket as UTCTimestamp,
       position: fill.side === "buy" ? "belowBar" : "aboveBar",
-      color: fill.side === "buy" ? "#34d399" : "#fb7185",
+      color: fill.side === "buy" ? "#22c55e" : "#ef4444",
       shape: fill.side === "buy" ? "arrowUp" : "arrowDown",
       text: `${fill.side === "buy" ? "B" : "S"} ${fill.size.toFixed(3)}`,
     });
   }
   out.sort((a, b) => (a.time as number) - (b.time as number));
-  return out;
+  return out.length > MAX_MARKERS ? out.slice(out.length - MAX_MARKERS) : out;
 }
 
 type CandleChartProps = {
@@ -523,13 +1162,15 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     });
     const series = chart.addCandlestickSeries({
-      upColor: "#34d399",
-      downColor: "#fb7185",
-      borderUpColor: "#34d399",
-      borderDownColor: "#fb7185",
-      wickUpColor: "#34d399",
-      wickDownColor: "#fb7185",
+      upColor: "#22c55e",
+      downColor: "#ef4444",
+      borderVisible: false,
+      wickUpColor: "rgba(34, 197, 94, 0.7)",
+      wickDownColor: "rgba(239, 68, 68, 0.7)",
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+    });
+    series.priceScale().applyOptions({
+      scaleMargins: { top: 0.08, bottom: 0.12 },
     });
     chartRef.current = chart;
     seriesRef.current = series;
@@ -604,8 +1245,8 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
         });
       }
     };
-    syncLine(bidLineRef, bidPrice, "#34d399", "BID");
-    syncLine(askLineRef, askPrice, "#fb7185", "ASK");
+    syncLine(bidLineRef, bidPrice, "#22c55e", "BID");
+    syncLine(askLineRef, askPrice, "#ef4444", "ASK");
   }, [bidPrice, askPrice]);
 
   useEffect(() => {
@@ -624,7 +1265,12 @@ export function PriceChartPanel() {
   const fills = state?.fills ?? [];
 
   const candles = useMemo(() => aggregateCandles(mids, bucketSec), [mids, bucketSec]);
-  const markers = useMemo(() => buildFillMarkers(fills, bucketSec), [fills, bucketSec]);
+  const markers = useMemo(() => {
+    if (candles.length === 0) return [];
+    const firstBucket = candles[0].time as number;
+    const lastBucket = candles[candles.length - 1].time as number;
+    return buildFillMarkers(fills, bucketSec, firstBucket, lastBucket);
+  }, [fills, bucketSec, candles]);
 
   const stats = useMemo(() => {
     if (candles.length === 0) return null;

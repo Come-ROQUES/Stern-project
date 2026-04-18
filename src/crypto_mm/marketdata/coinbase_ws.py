@@ -4,11 +4,11 @@ import asyncio
 import json
 import logging
 from collections import deque
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from math import sqrt
 from statistics import mean
 from time import monotonic
-from collections.abc import AsyncIterator
 from typing import Literal, cast
 
 import websockets
@@ -290,7 +290,7 @@ class MarketDataService:
             self._state_event.clear()
             try:
                 await asyncio.wait_for(self._state_event.wait(), timeout=15.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # Keep SSE connections warm even during quiet periods.
                 yield None
 
