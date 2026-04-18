@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from crypto_mm.common.settings import settings
@@ -30,12 +33,92 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await task
 
 
-app = FastAPI(title="Fractal Crypto Desk", lifespan=lifespan)
+app = FastAPI(title="Stern Crypto Desk", lifespan=lifespan)
 
 
 @app.get("/api/state")
 async def api_state() -> dict[str, object]:
     return await service.state_snapshot()
+
+
+@app.get("/api/export/fills.csv")
+async def export_fills() -> StreamingResponse:
+    fills = list(service.simulated_fills)
+    columns = ["ts", "side", "price", "size", "notional_usd", "reason"]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(columns)
+    for fill in fills:
+        price = float(fill["price"])
+        size = float(fill["size"])
+        writer.writerow(
+            [
+                fill["ts"],
+                fill["side"],
+                f"{price:.2f}",
+                f"{size:.8f}",
+                f"{price * size:.2f}",
+                fill["reason"],
+            ]
+        )
+    return _csv_response(buffer, filename=f"fills_{_stamp()}.csv")
+
+
+@app.get("/api/export/pnl.csv")
+async def export_pnl() -> StreamingResponse:
+    history = list(service.portfolio_history)
+    columns = ["ts", "equity_usd", "position_btc", "total_pnl_usd"]
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(columns)
+    for point in history:
+        writer.writerow(
+            [
+                point["ts"],
+                f"{float(point['equity']):.2f}",
+                f"{float(point['position_btc']):.8f}",
+                f"{float(point['total_pnl']):.2f}",
+            ]
+        )
+    return _csv_response(buffer, filename=f"pnl_{_stamp()}.csv")
+
+
+@app.get("/api/export/spreads.csv")
+async def export_spreads() -> StreamingResponse:
+    history = service.spread_tracker.tail(points=2_000)
+    sizes = list(history.keys())
+    columns = ["sample_index", *sizes]
+    series_lengths = [len(history[size]) for size in sizes]
+    max_len = max(series_lengths) if series_lengths else 0
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(columns)
+    for idx in range(max_len):
+        row: list[str] = [str(idx)]
+        for size in sizes:
+            values = history[size]
+            offset = max_len - len(values)
+            if idx < offset:
+                row.append("")
+            else:
+                row.append(f"{values[idx - offset]:.4f}")
+        writer.writerow(row)
+    return _csv_response(buffer, filename=f"spreads_{_stamp()}.csv")
+
+
+def _csv_response(buffer: io.StringIO, *, filename: str) -> StreamingResponse:
+    buffer.seek(0)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store, max-age=0",
+    }
+    return StreamingResponse(
+        iter([buffer.getvalue()]), media_type="text/csv; charset=utf-8", headers=headers
+    )
+
+
+def _stamp() -> str:
+    return datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 if FRONTEND_ASSETS.exists():
@@ -72,42 +155,23 @@ def _fallback_html() -> str:
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fractal Crypto Desk</title>
+    <title>Stern Crypto Desk</title>
     <style>
-      body {
-        margin: 0;
-        min-height: 100vh;
-        display: grid;
-        place-items: center;
-        background: #050510;
-        color: #e8ebe8;
-        font-family: "IBM Plex Sans", system-ui, sans-serif;
-      }
-      article {
-        max-width: 720px;
-        padding: 32px;
-        border-radius: 20px;
-        border: 1px solid rgba(0,255,136,0.12);
-        background: rgba(10,14,24,0.92);
-        box-shadow: 0 18px 40px rgba(0,0,0,0.35);
-      }
-      h1 {
-        margin: 0 0 12px;
-        letter-spacing: -0.04em;
-      }
-      p {
-        color: #8a918a;
-        line-height: 1.6;
-      }
-      code {
-        color: #2ce3ff;
-      }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+        background: #050510; color: #e8ebe8;
+        font-family: "IBM Plex Sans", system-ui, sans-serif; }
+      article { max-width: 720px; padding: 32px; border-radius: 20px;
+        border: 1px solid rgba(0,255,136,0.12); background: rgba(10,14,24,0.92);
+        box-shadow: 0 18px 40px rgba(0,0,0,0.35); }
+      h1 { margin: 0 0 12px; letter-spacing: -0.04em; }
+      p { color: #8a918a; line-height: 1.6; }
+      code { color: #2ce3ff; }
     </style>
   </head>
   <body>
     <article>
       <h1>Frontend build missing</h1>
-      <p>The React cockpit is not built yet. Run <code>npm --prefix frontend install</code> then <code>npm --prefix frontend run build</code>.</p>
+      <p>Run <code>npm --prefix frontend install</code> then <code>npm --prefix frontend run build</code>.</p>
     </article>
   </body>
 </html>

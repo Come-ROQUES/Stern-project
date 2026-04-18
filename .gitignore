@@ -15,3 +15,5 @@ frontend/*.tsbuildinfo
 .env
 coverage.xml
 htmlcov/
+_backups/
+.DS_Store

@@ -107,7 +107,10 @@ class MarketDataService:
         mid = self.order_book.mid_price()
         if mid is None:
             return
-        quote = self.market_maker.update_quote(mid_price=mid)
+        realized_vol_bps = self._realized_vol_bps()
+        quote = self.market_maker.update_quote(
+            mid_price=mid, realized_vol_bps=realized_vol_bps
+        )
         spreads = compute_depth_spreads(self.order_book)
         self.spread_tracker.record(spreads)
         self._record_live_snapshots(mid=mid, quote_active=quote is not None)
@@ -275,6 +278,9 @@ class MarketDataService:
             "inventory_btc": float(portfolio["position_btc"]),
             "avg_entry_price": float(portfolio["avg_entry_price"]),
             "risk_status": self.market_maker.risk_status,
+            "effective_spread_bps": self.market_maker.last_effective_spread_bps,
+            "skew_bps": self.market_maker.last_skew_bps,
+            "vol_input_bps": self.market_maker.last_vol_bps,
             "config": {
                 "base_quote_spread_bps": self._settings.base_quote_spread_bps,
                 "order_size_btc": self._settings.order_size_btc,
@@ -283,6 +289,13 @@ class MarketDataService:
                 "max_loss": self._settings.max_loss,
             },
         }
+
+    def _realized_vol_bps(self) -> float:
+        mid_values = [float(point["mid_price"]) for point in self.mid_history]
+        returns = _returns_bps(mid_values[-60:])
+        if not returns:
+            return 0.0
+        return sqrt(mean([ret * ret for ret in returns]))
 
     def _quant_lab_snapshot(
         self,
