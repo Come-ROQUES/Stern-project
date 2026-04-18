@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import io
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
@@ -39,6 +40,26 @@ app = FastAPI(title="Fractal Crypto Desk", lifespan=lifespan)
 @app.get("/api/state")
 async def api_state() -> dict[str, object]:
     return await service.state_snapshot()
+
+
+@app.get("/api/state/stream")
+async def api_state_stream() -> StreamingResponse:
+    async def event_stream() -> AsyncIterator[str]:
+        async for snapshot in service.state_stream():
+            if snapshot is None:
+                yield ": keep-alive\n\n"
+                continue
+            yield f"data: {json.dumps(snapshot)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/export/fills.csv")

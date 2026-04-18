@@ -7,6 +7,8 @@ from collections import deque
 from datetime import UTC, datetime
 from math import sqrt
 from statistics import mean
+from time import monotonic
+from collections.abc import AsyncIterator
 from typing import Literal, cast
 
 import websockets
@@ -22,6 +24,9 @@ from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
 logger = logging.getLogger(__name__)
 EVENT_LOOP_YIELD_EVERY = 1
 SNAPSHOT_YIELD_EVERY = 500
+READINESS_MIN_POINTS = 1
+FAST_ANALYTICS_INTERVAL_S = 0.25
+STATE_PUBLISH_INTERVAL_S = 0.10
 
 
 class MarketDataService:
@@ -29,6 +34,11 @@ class MarketDataService:
         self._settings = settings
         self._started_at = datetime.now(tz=UTC)
         self._message_count = 0
+        self._state_version = 0
+        self._state_event = asyncio.Event()
+        self._last_analytics_at = 0.0
+        self._last_publish_at = 0.0
+        self._last_vol_bps = 0.0
         self.order_book = OrderBook()
         self.trade_tape: deque[PublicTrade] = deque(maxlen=settings.trade_history_limit)
         self.simulated_fills: deque[dict[str, float | str]] = deque(
@@ -94,6 +104,9 @@ class MarketDataService:
                     await asyncio.sleep(0)
 
     async def _handle_message(self, message: dict[str, object]) -> None:
+        # Golden rule: dashboard reactivity wins. Keep top-of-book and quote
+        # updates on the fast path, and sample heavier analytics so bursts of
+        # market data cannot delay UI freshness.
         msg_type = str(message.get("type", ""))
         channel = str(message.get("channel", ""))
         self._message_count += 1
@@ -108,13 +121,12 @@ class MarketDataService:
         mid = self.order_book.mid_price()
         if mid is None:
             return
-        realized_vol_bps = self._realized_vol_bps()
         quote = self.market_maker.update_quote(
-            mid_price=mid, realized_vol_bps=realized_vol_bps
+            mid_price=mid,
+            realized_vol_bps=self._last_vol_bps,
         )
-        spreads = compute_depth_spreads(self.order_book)
-        self.spread_tracker.record(spreads)
-        self._record_live_snapshots(mid=mid, quote_active=quote is not None)
+        self._maybe_refresh_analytics(mid=mid, quote_active=quote is not None)
+        self._publish_state()
 
     def _realized_vol_bps(self) -> float:
         mid_values = [float(point["mid_price"]) for point in list(self.mid_history)[-60:]]
@@ -129,8 +141,6 @@ class MarketDataService:
         events = message.get("events", [])
         if not isinstance(events, list):
             return
-        bids: list[tuple[str, str]] = []
-        asks: list[tuple[str, str]] = []
         for event in events:
             if not isinstance(event, dict):
                 continue
@@ -139,23 +149,25 @@ class MarketDataService:
                 continue
             event_type = str(event.get("type", ""))
             if event_type == "snapshot":
-                bids.clear()
-                asks.clear()
+                self.order_book.clear()
                 for index, update in enumerate(updates):
                     if not isinstance(update, dict):
                         continue
                     side = _normalize_book_side(str(update.get("side", "")))
                     price = str(update.get("price_level", "0"))
                     size = str(update.get("new_quantity", "0"))
-                    if side == "buy":
-                        bids.append((price, size))
-                    elif side == "sell":
-                        asks.append((price, size))
+                    if side:
+                        self.order_book.apply_l2_update(
+                            side=side,
+                            price=price,
+                            size=size,
+                        )
                     if index and index % SNAPSHOT_YIELD_EVERY == 0:
-                        # Keep /api/state responsive while the initial L2 dump is parsed.
+                        # Expose provisional top-of-book while the initial L2 dump
+                        # is still streaming so the UI can render immediately.
+                        self._refresh_quote_preview()
                         await asyncio.sleep(0)
-                if bids or asks:
-                    self.order_book.apply_snapshot(bids=bids, asks=asks)
+                self._refresh_quote_preview()
             elif event_type == "update":
                 for update in updates:
                     if not isinstance(update, dict):
@@ -169,6 +181,38 @@ class MarketDataService:
                             price=price,
                             size=size,
                         )
+
+    def _refresh_quote_preview(self) -> None:
+        mid = self.order_book.mid_price()
+        if mid is None:
+            return
+        self.market_maker.update_quote(
+            mid_price=mid,
+            realized_vol_bps=self._last_vol_bps,
+        )
+        self._publish_state(force=True)
+
+    def _maybe_refresh_analytics(self, mid: float, quote_active: bool) -> None:
+        now = monotonic()
+        if now - self._last_analytics_at < FAST_ANALYTICS_INTERVAL_S:
+            return
+        self._last_analytics_at = now
+        self._last_vol_bps = self._realized_vol_bps()
+        quote = self.market_maker.update_quote(
+            mid_price=mid,
+            realized_vol_bps=self._last_vol_bps,
+        )
+        spreads = compute_depth_spreads(self.order_book)
+        self.spread_tracker.record(spreads)
+        self._record_live_snapshots(mid=mid, quote_active=quote is not None and quote_active)
+
+    def _publish_state(self, force: bool = False) -> None:
+        now = monotonic()
+        if not force and now - self._last_publish_at < STATE_PUBLISH_INTERVAL_S:
+            return
+        self._last_publish_at = now
+        self._state_version += 1
+        self._state_event.set()
 
     def _handle_market_trades_message(self, message: dict[str, object]) -> None:
         events = message.get("events", [])
@@ -234,6 +278,21 @@ class MarketDataService:
             ),
             "backtest_lite": self._backtest_snapshot(portfolio=portfolio),
         }
+
+    async def state_stream(self) -> AsyncIterator[dict[str, object] | None]:
+        last_seen = -1
+        while True:
+            if self._state_version != last_seen:
+                last_seen = self._state_version
+                yield await self.state_snapshot()
+                continue
+
+            self._state_event.clear()
+            try:
+                await asyncio.wait_for(self._state_event.wait(), timeout=15.0)
+            except asyncio.TimeoutError:
+                # Keep SSE connections warm even during quiet periods.
+                yield None
 
     def _record_live_snapshots(self, mid: float, quote_active: bool) -> None:
         now = datetime.now(tz=UTC)
@@ -322,7 +381,7 @@ class MarketDataService:
         flow_imbalance = _trade_flow_imbalance(list(self.trade_tape)[:50])
         micro_bias_bps = _micro_bias_bps(top=top, mid=mid)
         return {
-            "readiness": "ready" if len(mid_values) >= 25 else "warming",
+            "readiness": "ready" if len(mid_values) >= READINESS_MIN_POINTS else "warming",
             "window_points": len(mid_values),
             "realized_vol_bps": sqrt(mean([ret * ret for ret in returns_bps])) if returns_bps else 0.0,
             "momentum_bps": _momentum_bps(mid_values),
@@ -364,7 +423,7 @@ class MarketDataService:
         total_pnl = float(portfolio["realized_pnl"]) + float(portfolio["unrealized_pnl"])
         return {
             "mode": "paper_session_replay",
-            "status": "ready" if len(equity_curve) >= 25 else "warming",
+            "status": "ready" if len(equity_curve) >= READINESS_MIN_POINTS else "warming",
             "window_points": len(equity_curve),
             "equity_curve": equity_curve[-60:],
             "pnl_curve": [float(point["total_pnl"]) for point in self.portfolio_history][-60:],
