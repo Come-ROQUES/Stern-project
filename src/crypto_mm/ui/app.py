@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from crypto_mm.common.settings import settings
@@ -36,6 +39,76 @@ app = FastAPI(title="Fractal Crypto Desk", lifespan=lifespan)
 @app.get("/api/state")
 async def api_state() -> dict[str, object]:
     return await service.state_snapshot()
+
+
+@app.get("/api/export/fills.csv")
+async def export_fills_csv() -> StreamingResponse:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["ts", "side", "price", "size", "notional_usd", "reason"])
+    for fill in list(service.simulated_fills):
+        price = float(fill["price"])
+        size = float(fill["size"])
+        writer.writerow(
+            [
+                fill.get("ts", ""),
+                fill.get("side", ""),
+                price,
+                size,
+                price * size,
+                fill.get("reason", ""),
+            ]
+        )
+    return _csv_response(buffer, f"fills_{_stamp()}.csv")
+
+
+@app.get("/api/export/pnl.csv")
+async def export_pnl_csv() -> StreamingResponse:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["ts", "equity_usd", "position_btc", "total_pnl_usd"])
+    for point in list(service.portfolio_history):
+        writer.writerow(
+            [
+                point.get("ts", ""),
+                float(point.get("equity", 0.0)),
+                float(point.get("position_btc", 0.0)),
+                float(point.get("total_pnl", 0.0)),
+            ]
+        )
+    return _csv_response(buffer, f"pnl_{_stamp()}.csv")
+
+
+@app.get("/api/export/spreads.csv")
+async def export_spreads_csv() -> StreamingResponse:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    depths = ["0.1 BTC", "1 BTC", "5 BTC", "10 BTC"]
+    writer.writerow(["sample_index", *depths])
+    history = service.spread_tracker.tail()
+    if isinstance(history, dict):
+        series = {depth: list(history.get(depth, [])) for depth in depths}
+        max_len = max((len(values) for values in series.values()), default=0)
+        for index in range(max_len):
+            row: list[object] = [index]
+            for depth in depths:
+                values = series[depth]
+                row.append(values[index] if index < len(values) else "")
+            writer.writerow(row)
+    return _csv_response(buffer, f"spreads_{_stamp()}.csv")
+
+
+def _csv_response(buffer: io.StringIO, filename: str) -> StreamingResponse:
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _stamp() -> str:
+    return datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 if FRONTEND_ASSETS.exists():
