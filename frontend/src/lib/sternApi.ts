@@ -147,6 +147,7 @@ export type SternState = {
 };
 
 const DEFAULT_POLL_MS = 500;
+const DEFAULT_STREAM_URL = "/api/state/stream";
 
 export async function fetchSternState(signal?: AbortSignal): Promise<SternState> {
   const res = await fetch("/api/state", { signal, credentials: "include" });
@@ -183,6 +184,10 @@ const listeners = new Set<() => void>();
 let activePollMs: number | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let inFlight: Promise<void> | null = null;
+let stream: EventSource | null = null;
+let streamRetryTimer: ReturnType<typeof setTimeout> | null = null;
+const streamPreferred = typeof window !== "undefined" && "EventSource" in window;
+let streamConnected = false;
 
 function emit(next: SternStateResult): void {
   snapshot = next;
@@ -190,7 +195,7 @@ function emit(next: SternStateResult): void {
 }
 
 async function runPoll(): Promise<void> {
-  if (listeners.size === 0) {
+  if (listeners.size === 0 || (streamPreferred && streamConnected)) {
     inFlight = null;
     return;
   }
@@ -202,12 +207,60 @@ async function runPoll(): Promise<void> {
     emit({ data: snapshot.data, error: msg, lastUpdatedAt: snapshot.lastUpdatedAt });
   } finally {
     inFlight = null;
-    if (listeners.size > 0 && activePollMs != null) {
+    if (listeners.size > 0 && activePollMs != null && !(streamPreferred && streamConnected)) {
       pollTimer = setTimeout(() => {
         inFlight = runPoll();
       }, activePollMs);
     }
   }
+}
+
+function closeStream(): void {
+  if (!stream) return;
+  stream.close();
+  stream = null;
+  streamConnected = false;
+}
+
+function scheduleStreamRetry(): void {
+  if (!streamPreferred || streamRetryTimer || listeners.size === 0) {
+    return;
+  }
+  streamRetryTimer = setTimeout(() => {
+    streamRetryTimer = null;
+    ensureStream();
+  }, 5_000);
+}
+
+function ensureStream(): void {
+  if (!streamPreferred || stream || listeners.size === 0) {
+    return;
+  }
+  stream = new EventSource(DEFAULT_STREAM_URL, { withCredentials: true });
+  stream.onopen = () => {
+    streamConnected = true;
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  };
+  stream.onmessage = (event) => {
+    try {
+      const state = JSON.parse(event.data) as SternState;
+      streamConnected = true;
+      emit({ data: state, error: null, lastUpdatedAt: Date.now() });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      emit({ data: snapshot.data, error: `stream parse error: ${msg}`, lastUpdatedAt: snapshot.lastUpdatedAt });
+    }
+  };
+  stream.onerror = () => {
+    closeStream();
+    scheduleStreamRetry();
+    if (listeners.size > 0 && !inFlight && !pollTimer) {
+      inFlight = runPoll();
+    }
+  };
 }
 
 function subscribe(pollMs: number, listener: () => void): () => void {
@@ -217,12 +270,18 @@ function subscribe(pollMs: number, listener: () => void): () => void {
   if (activePollMs == null || pollMs < activePollMs) {
     activePollMs = pollMs;
   }
-  if (!inFlight && !pollTimer) {
+  ensureStream();
+  if ((!streamPreferred || snapshot.data == null) && !inFlight && !pollTimer) {
     inFlight = runPoll();
   }
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0) {
+      closeStream();
+      if (streamRetryTimer) {
+        clearTimeout(streamRetryTimer);
+        streamRetryTimer = null;
+      }
       if (pollTimer) {
         clearTimeout(pollTimer);
         pollTimer = null;

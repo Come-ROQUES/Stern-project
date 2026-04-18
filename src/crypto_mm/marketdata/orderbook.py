@@ -10,6 +10,10 @@ class OrderBook:
         self._bids: dict[float, float] = {}
         self._asks: dict[float, float] = {}
 
+    def clear(self) -> None:
+        self._bids.clear()
+        self._asks.clear()
+
     def apply_snapshot(
         self, bids: Iterable[tuple[str, str]], asks: Iterable[tuple[str, str]]
     ) -> None:
@@ -78,4 +82,3 @@ class OrderBook:
             if remaining <= 1e-12:
                 return total
         return None
-

@@ -1,8 +1,19 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createChart,
+  type CandlestickData,
+  type IChartApi,
+  type IPriceLine,
+  type ISeriesApi,
+  type SeriesMarker,
+  type Time,
+  type UTCTimestamp,
+} from "lightweight-charts";
 import {
   downloadCsv,
   useSternState,
   type BookLevel,
+  type MidPoint,
   type PublicTrade,
   type SimFill,
   type SpreadMetric,
@@ -405,109 +416,357 @@ export function ProTerminalPanel() {
 }
 
 // ============================================================================
-// Price Chart — mid history + quote bands + fill markers (lightweight SVG)
+// Price Chart — OHLC candles (lightweight-charts, WebGL-backed) with MM
+// quote overlay and fill markers. Aggregates mid_history client-side into
+// time buckets so no backend change is required.
 // ============================================================================
 
-function MiniMidChart({
-  mids,
-  bidPrice,
-  askPrice,
-}: {
-  mids: { ts: string; mid_price: number }[];
+const BUCKET_CHOICES = [1, 2, 5, 15] as const;
+type BucketSec = (typeof BUCKET_CHOICES)[number];
+
+function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<UTCTimestamp>[] {
+  if (mids.length === 0) return [];
+  const buckets = new Map<number, CandlestickData<UTCTimestamp>>();
+  const order: number[] = [];
+  for (const point of mids) {
+    const ms = Date.parse(point.ts);
+    if (!Number.isFinite(ms)) continue;
+    const t = Math.floor(ms / 1000);
+    const bucket = Math.floor(t / bucketSec) * bucketSec;
+    const existing = buckets.get(bucket);
+    if (!existing) {
+      buckets.set(bucket, {
+        time: bucket as UTCTimestamp,
+        open: point.mid_price,
+        high: point.mid_price,
+        low: point.mid_price,
+        close: point.mid_price,
+      });
+      order.push(bucket);
+    } else {
+      if (point.mid_price > existing.high) existing.high = point.mid_price;
+      if (point.mid_price < existing.low) existing.low = point.mid_price;
+      existing.close = point.mid_price;
+    }
+  }
+  return order.map((b) => buckets.get(b)!);
+}
+
+function buildFillMarkers(fills: SimFill[], bucketSec: number): SeriesMarker<Time>[] {
+  const out: SeriesMarker<Time>[] = [];
+  for (const fill of fills.slice(0, 60)) {
+    const ms = Date.parse(fill.ts);
+    if (!Number.isFinite(ms)) continue;
+    const t = Math.floor(ms / 1000);
+    const bucket = Math.floor(t / bucketSec) * bucketSec;
+    out.push({
+      time: bucket as UTCTimestamp,
+      position: fill.side === "buy" ? "belowBar" : "aboveBar",
+      color: fill.side === "buy" ? "#34d399" : "#fb7185",
+      shape: fill.side === "buy" ? "arrowUp" : "arrowDown",
+      text: `${fill.side === "buy" ? "B" : "S"} ${fill.size.toFixed(3)}`,
+    });
+  }
+  out.sort((a, b) => (a.time as number) - (b.time as number));
+  return out;
+}
+
+type CandleChartProps = {
+  candles: CandlestickData<UTCTimestamp>[];
   bidPrice: number | null;
   askPrice: number | null;
-}) {
-  const data = mids.slice(-120);
-  if (data.length < 2) {
-    return (
-      <div className="h-64 flex items-center justify-center text-sm text-neutral-500">
-        Warming up mid history…
-      </div>
-    );
-  }
-  const min = Math.min(...data.map((p) => p.mid_price));
-  const max = Math.max(...data.map((p) => p.mid_price));
-  const span = Math.max(1, max - min);
-  const w = 800;
-  const h = 240;
-  const path = data
-    .map((p, i) => {
-      const x = (i / (data.length - 1)) * w;
-      const y = h - ((p.mid_price - min) / span) * (h - 20) - 10;
-      return `${i === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
+  markers: SeriesMarker<Time>[];
+};
 
-  const bidY =
-    bidPrice !== null
-      ? h - ((bidPrice - min) / span) * (h - 20) - 10
-      : null;
-  const askY =
-    askPrice !== null
-      ? h - ((askPrice - min) / span) * (h - 20) - 10
-      : null;
+function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const bidLineRef = useRef<IPriceLine | null>(null);
+  const askLineRef = useRef<IPriceLine | null>(null);
+  const prevLastTimeRef = useRef<number | null>(null);
 
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-64">
-      <path
-        d={path}
-        fill="none"
-        stroke="#2ce3ff"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {bidY !== null && (
-        <line
-          x1="0"
-          x2={w}
-          y1={bidY}
-          y2={bidY}
-          stroke="#34d399"
-          strokeDasharray="4 4"
-          strokeWidth="1"
-        />
-      )}
-      {askY !== null && (
-        <line
-          x1="0"
-          x2={w}
-          y1={askY}
-          y2={askY}
-          stroke="#fb7185"
-          strokeDasharray="4 4"
-          strokeWidth="1"
-        />
-      )}
-    </svg>
-  );
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const chart = createChart(container, {
+      width: container.clientWidth,
+      height: 320,
+      layout: {
+        background: { color: "transparent" },
+        textColor: "#a1a1aa",
+        fontFamily:
+          "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        fontSize: 11,
+      },
+      grid: {
+        vertLines: { color: "rgba(82, 82, 91, 0.18)" },
+        horzLines: { color: "rgba(82, 82, 91, 0.18)" },
+      },
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: true,
+        borderColor: "rgba(82, 82, 91, 0.4)",
+        rightOffset: 4,
+        barSpacing: 8,
+      },
+      rightPriceScale: {
+        borderColor: "rgba(82, 82, 91, 0.4)",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+      },
+      crosshair: {
+        mode: 0,
+        vertLine: { color: "#2ce3ff", width: 1, style: 2, labelBackgroundColor: "#0891b2" },
+        horzLine: { color: "#2ce3ff", width: 1, style: 2, labelBackgroundColor: "#0891b2" },
+      },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true },
+      handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+    });
+    const series = chart.addCandlestickSeries({
+      upColor: "#34d399",
+      downColor: "#fb7185",
+      borderUpColor: "#34d399",
+      borderDownColor: "#fb7185",
+      wickUpColor: "#34d399",
+      wickDownColor: "#fb7185",
+      priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+    });
+    chartRef.current = chart;
+    seriesRef.current = series;
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        chart.applyOptions({ width: Math.max(1, Math.floor(entry.contentRect.width)) });
+      }
+    });
+    ro.observe(container);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+      bidLineRef.current = null;
+      askLineRef.current = null;
+      prevLastTimeRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    const chart = chartRef.current;
+    if (!series || !chart) return;
+    series.setData(candles);
+    const lastTime =
+      candles.length > 0 ? (candles[candles.length - 1].time as number) : null;
+    const prevLast = prevLastTimeRef.current;
+    prevLastTimeRef.current = lastTime;
+    // Only auto-scroll to the right edge if the user hasn't panned back —
+    // i.e. the previous latest bar was still within the visible range.
+    if (lastTime != null) {
+      const visible = chart.timeScale().getVisibleRange();
+      const following =
+        prevLast == null ||
+        !visible ||
+        (visible.to as number) >= prevLast - 0.5;
+      if (following) {
+        chart.timeScale().scrollToRealTime();
+      }
+    }
+  }, [candles]);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    const syncLine = (
+      ref: React.MutableRefObject<IPriceLine | null>,
+      price: number | null,
+      color: string,
+      title: string,
+    ) => {
+      if (price == null || !Number.isFinite(price)) {
+        if (ref.current) {
+          series.removePriceLine(ref.current);
+          ref.current = null;
+        }
+        return;
+      }
+      if (ref.current) {
+        ref.current.applyOptions({ price });
+      } else {
+        ref.current = series.createPriceLine({
+          price,
+          color,
+          lineWidth: 1,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title,
+        });
+      }
+    };
+    syncLine(bidLineRef, bidPrice, "#34d399", "BID");
+    syncLine(askLineRef, askPrice, "#fb7185", "ASK");
+  }, [bidPrice, askPrice]);
+
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    series.setMarkers(markers);
+  }, [markers]);
+
+  return <div ref={containerRef} className="w-full h-80" />;
 }
 
 export function PriceChartPanel() {
   const { data: state } = useSternState();
+  const [bucketSec, setBucketSec] = useState<BucketSec>(2);
+  const mids = state?.mid_history ?? [];
+  const fills = state?.fills ?? [];
+
+  const candles = useMemo(() => aggregateCandles(mids, bucketSec), [mids, bucketSec]);
+  const markers = useMemo(() => buildFillMarkers(fills, bucketSec), [fills, bucketSec]);
+
+  const stats = useMemo(() => {
+    if (candles.length === 0) return null;
+    const last = candles[candles.length - 1];
+    const first = candles[0];
+    let high = candles[0].high;
+    let low = candles[0].low;
+    for (const c of candles) {
+      if (c.high > high) high = c.high;
+      if (c.low < low) low = c.low;
+    }
+    const change = last.close - first.open;
+    const changePct = first.open !== 0 ? (change / first.open) * 100 : 0;
+    const bullish = last.close >= last.open;
+    return { last, first, high, low, change, changePct, bullish };
+  }, [candles]);
+
+  const spreadUsd =
+    state?.best_bid && state?.best_ask
+      ? state.best_ask.price - state.best_bid.price
+      : null;
+
   return (
     <div className="p-6 space-y-4">
       <PanelHeader
         title="Price Action"
-        subtitle="Mid price with live MM quote bands"
+        subtitle="OHLC candles · MM quote overlay · fill markers"
         state={state}
       />
       <Panel>
-        <MiniMidChart
-          mids={state?.mid_history ?? []}
-          bidPrice={state?.quote?.bid_price ?? null}
-          askPrice={state?.quote?.ask_price ?? null}
-        />
-        <div className="mt-3 flex gap-6 text-xs font-mono text-neutral-400">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+          <div className="flex gap-4 text-xs font-mono items-baseline flex-wrap">
+            {stats ? (
+              <>
+                <span className="text-neutral-500">
+                  O{" "}
+                  <span className="text-neutral-200">
+                    {formatUsd(stats.last.open, 2)}
+                  </span>
+                </span>
+                <span className="text-neutral-500">
+                  H{" "}
+                  <span className="text-emerald-300">
+                    {formatUsd(stats.last.high, 2)}
+                  </span>
+                </span>
+                <span className="text-neutral-500">
+                  L{" "}
+                  <span className="text-rose-300">
+                    {formatUsd(stats.last.low, 2)}
+                  </span>
+                </span>
+                <span className="text-neutral-500">
+                  C{" "}
+                  <span
+                    className={
+                      stats.bullish ? "text-emerald-300" : "text-rose-300"
+                    }
+                  >
+                    {formatUsd(stats.last.close, 2)}
+                  </span>
+                </span>
+                <span
+                  className={
+                    stats.change >= 0 ? "text-emerald-300" : "text-rose-300"
+                  }
+                >
+                  {stats.change >= 0 ? "+" : ""}
+                  {formatUsd(stats.change, 2)} ({stats.changePct >= 0 ? "+" : ""}
+                  {stats.changePct.toFixed(3)}%)
+                </span>
+              </>
+            ) : (
+              <span className="text-neutral-500">—</span>
+            )}
+          </div>
+          <div className="flex gap-1 text-[11px]">
+            {BUCKET_CHOICES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setBucketSec(s)}
+                className={`px-2 py-0.5 font-mono rounded transition-colors ${
+                  bucketSec === s
+                    ? "bg-cyan-500/20 text-cyan-200 border border-cyan-500/40"
+                    : "text-neutral-500 hover:text-neutral-200 border border-transparent"
+                }`}
+              >
+                {s}s
+              </button>
+            ))}
+          </div>
+        </div>
+        {candles.length < 2 ? (
+          <div className="h-80 flex items-center justify-center text-sm text-neutral-500">
+            Warming up mid history…
+          </div>
+        ) : (
+          <CandleChart
+            candles={candles}
+            bidPrice={state?.quote?.bid_price ?? null}
+            askPrice={state?.quote?.ask_price ?? null}
+            markers={markers}
+          />
+        )}
+        <div className="mt-3 flex items-center gap-x-6 gap-y-1 text-[11px] font-mono text-neutral-400 flex-wrap">
           <span className="flex items-center gap-2">
-            <span className="h-0.5 w-5 bg-cyan-300 inline-block" /> Mid
+            <span className="h-2.5 w-2.5 bg-emerald-400 inline-block rounded-sm" />
+            Bullish
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-0.5 w-5 bg-emerald-300 inline-block" /> Bid quote
+            <span className="h-2.5 w-2.5 bg-rose-400 inline-block rounded-sm" />
+            Bearish
           </span>
           <span className="flex items-center gap-2">
-            <span className="h-0.5 w-5 bg-rose-300 inline-block" /> Ask quote
+            <span className="h-px w-5 border-t border-dashed border-emerald-300 inline-block" />
+            MM bid
           </span>
+          <span className="flex items-center gap-2">
+            <span className="h-px w-5 border-t border-dashed border-rose-300 inline-block" />
+            MM ask
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-emerald-300">▲</span>
+            <span className="text-rose-300">▼</span>
+            Fill
+          </span>
+          {stats && (
+            <span className="ml-auto text-neutral-500">
+              Window {formatUsd(stats.low, 2)} – {formatUsd(stats.high, 2)} ·{" "}
+              {candles.length} candles · {bucketSec}s
+              {spreadUsd != null && (
+                <>
+                  {" "}
+                  · top spread{" "}
+                  <span className="text-neutral-300">
+                    {formatUsd(spreadUsd, 2)}
+                  </span>
+                </>
+              )}
+            </span>
+          )}
         </div>
       </Panel>
     </div>
