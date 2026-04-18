@@ -104,6 +104,9 @@ const loadLogsPanel = () =>
 const loadEmergencyPanel = () =>
     import('./components/EmergencyPanel');
 
+// Stern crypto panels — lightweight, consume /api/state via sternApi.
+import * as SternPanels from './components/stern/panels';
+
 const S2PairsDesk = React.lazy(() =>
     loadS2PairsDesk().then((module) => ({ default: module.S2PairsDesk }))
 );
@@ -450,44 +453,25 @@ function setHashIfChanged(target: string): void {
     window.location.hash = normalizedTarget;
 }
 
-function renderTerminalTab(tabId: string, options: RenderTabOptions = {}) {
+function renderTerminalTab(tabId: string, _options: RenderTabOptions = {}) {
     switch (tabId) {
         case 'overview':
-            return withTabSuspense(<StrategyOverview />, 'Loading overview');
+            return <SternPanels.OverviewPanel />;
         case 'terminal':
-            return withTabSuspense(<ContextGuard><ProTerminalPanel /></ContextGuard>, 'Loading terminal');
-        case 'replay':
-            return withTabSuspense(<ContextGuard><SignalReplayPanel /></ContextGuard>, 'Loading replay');
-        case 'pairs':
-            return withTabSuspense(<ContextGuard><S2PairsDesk /></ContextGuard>, 'Loading S2 desk');
-        case 's3':
-            return withTabSuspense(<ContextGuard><S3TrendDesk /></ContextGuard>, 'Loading S3 desk');
+            return <SternPanels.ProTerminalPanel />;
         case 'chart':
-            return withTabSuspense(<ContextGuard><PriceTradesTV /></ContextGuard>, 'Loading chart');
+            return <SternPanels.PriceChartPanel />;
+        case 'pairs':
+            return <SternPanels.MicrostructurePanel />;
         case 'portfolio':
         case 'performance':
-            return withTabSuspense(<PortfolioTab />, 'Loading portfolio');
-        case 'anomalies':
-            return withTabSuspense(<ContextGuard><AnomaliesPanel /></ContextGuard>, 'Loading anomalies');
-        case 'logs':
-            return withTabSuspense(<ContextGuard><LogsPanel /></ContextGuard>, 'Loading logs');
-        case 'emergency':
-            if (!options.emergencyBuildReady) {
-                return <TabLoadingFallback label="Checking latest emergency build" />;
-            }
-            return withTabSuspense(<EmergencyPanel />, 'Loading emergency');
+            return <SternPanels.PortfolioPanel />;
         case 'ib-account':
-            return withTabSuspense(<IBAccountPanel />, 'Loading IB account');
+            return <SternPanels.RiskPanel />;
         case 'vm-status':
-            return withTabSuspense(<VMStatusDesk />, 'Loading VM status');
-        case 'latency':
-            return withTabSuspense(<ContextGuard><LatencyPanel /></ContextGuard>, 'Loading latency');
-        case 'database':
-            return withTabSuspense(<ContextGuard><DatabasePanelCanonical /></ContextGuard>, 'Loading database');
-        case 'config':
-            return withTabSuspense(<Cockpit />, 'Loading cockpit');
+            return <SternPanels.SystemPanel />;
         case 'export':
-            return withTabSuspense(<ExportDesk />, 'Loading export');
+            return <SternPanels.ExportPanel />;
         default:
             return (
                 <div className="text-center text-neutral-400 py-12">
@@ -543,9 +527,9 @@ function renderQuantTab(tabId: string) {
         case 'quant-market':
             return (
                 <div className="flex flex-col h-full">
-                    <QuantLabHeader title="Market Conditions" subtitle="Spreads, volatilite, data freshness" />
+                    <QuantLabHeader title="Microstructure" subtitle="Realized vol, momentum, depth imbalance, micro-bias" />
                     <div className="flex-1 overflow-auto">
-                        {withTabSuspense(<MarketConditions />, 'Loading market conditions')}
+                        <SternPanels.MicrostructurePanel />
                     </div>
                 </div>
             );
@@ -656,31 +640,7 @@ function canIdlePreloadHeavyTabs(): boolean {
 function renderBacktestTab(tabId: string) {
     switch (tabId) {
         case 'bt-cockpit':
-        case 'bt-campaigns':
-        case 'bt-candidates':
-        case 'bt-walk-forward':
-        case 'bt-promotion':
-        case 'bt-paper-match':
-        case 'bt-runs':
-        case 'bt-launch':
-            return withTabSuspense(
-                <BacktestPipelineWorkspace
-                    view={tabId as
-                        | 'bt-cockpit'
-                        | 'bt-campaigns'
-                        | 'bt-candidates'
-                        | 'bt-walk-forward'
-                        | 'bt-promotion'
-                        | 'bt-paper-match'
-                        | 'bt-runs'
-                        | 'bt-launch'}
-                />,
-                'Loading backtest workspace'
-            );
-        case 'bt-results':
-            return withTabSuspense(<BacktestResults />, 'Loading backtest results');
-        case 'bt-data':
-            return withTabSuspense(<BacktestDataHealth />, 'Loading backtest data');
+            return <SternPanels.BacktestCockpitPanel />;
         default:
             return (
                 <div className="text-center text-neutral-400 py-12">

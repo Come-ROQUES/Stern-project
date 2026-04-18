@@ -46,7 +46,7 @@ export const TERMINAL_TABS: NavTab[] = [
         section: 'DESK',
         question: '',
         icon: 'LayoutDashboard',
-        requiresRunId: true,
+        requiresRunId: false,
         visibleInModes: ['prod', 'research', 'dev'],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
@@ -58,7 +58,7 @@ export const TERMINAL_TABS: NavTab[] = [
         section: 'DESK',
         question: '',
         icon: 'Terminal',
-        requiresRunId: true,
+        requiresRunId: false,
         visibleInModes: ['prod', 'research', 'dev'],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
@@ -71,9 +71,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'History',
         requiresRunId: true,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'pairs',
@@ -81,7 +82,7 @@ export const TERMINAL_TABS: NavTab[] = [
         section: 'DESK',
         question: '',
         icon: 'Link2',
-        requiresRunId: true,
+        requiresRunId: false,
         visibleInModes: ['prod', 'research', 'dev'],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
@@ -93,9 +94,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'Activity',
         requiresRunId: true,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'chart',
@@ -103,7 +105,7 @@ export const TERMINAL_TABS: NavTab[] = [
         section: 'DESK',
         question: '',
         icon: 'LineChart',
-        requiresRunId: true,
+        requiresRunId: false,
         visibleInModes: ['prod', 'research', 'dev'],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
@@ -127,9 +129,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'Timer',
         requiresRunId: true,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'anomalies',
@@ -138,9 +141,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'AlertTriangle',
         requiresRunId: true,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'logs',
@@ -149,9 +153,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'ScrollText',
         requiresRunId: false,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'emergency',
@@ -160,10 +165,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'AlertOctagon',
         requiresRunId: false,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
-        mobilePriority: 4,
+        deprecated: true,
     },
 
     // ============ SYSTEM SECTION ============
@@ -190,7 +195,6 @@ export const TERMINAL_TABS: NavTab[] = [
         featureGroup: 'terminal',
     },
 
-    // ============ SYSTEM SECTION ============
     {
         id: 'database',
         label: 'Database',
@@ -198,9 +202,10 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'Database',
         requiresRunId: false,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'config',
@@ -209,15 +214,16 @@ export const TERMINAL_TABS: NavTab[] = [
         question: '',
         icon: 'Settings',
         requiresRunId: true,
-        visibleInModes: ['prod', 'research', 'dev'],
+        visibleInModes: [],
         requiresResearchToggle: false,
         featureGroup: 'terminal',
+        deprecated: true,
     },
     {
         id: 'export',
         label: 'Export',
         section: 'SYSTEM',
-        question: 'Explorer et exporter les donnees brutes',
+        question: 'Exporter fills, PnL et spreads en CSV',
         icon: 'Download',
         requiresRunId: false,
         visibleInModes: ['prod', 'research', 'dev'],
@@ -495,9 +501,34 @@ export const BACKTEST_TABS: NavTab[] = [
     },
 ];
 
+/**
+ * Stern (crypto MM) whitelist: tabs whose data source exists in /api/state.
+ * Everything not in this set is hidden even if declared above, keeping the
+ * Fractal shell intact without exposing FX-only panels with no backend.
+ */
+const STERN_ENABLED_TABS: ReadonlySet<string> = new Set<string>([
+    // Terminal
+    'overview',
+    'terminal',
+    'chart',
+    'pairs',
+    'portfolio',
+    'ib-account',
+    'vm-status',
+    'export',
+    // Quant (crypto microstructure only)
+    'quant-market',
+    // Backtest (paper session replay from snapshot)
+    'bt-cockpit',
+]);
+
 export function getTabsForMode(appMode: AppMode): NavTab[] {
-    if (appMode === 'backtest') return BACKTEST_TABS;
-    return appMode === 'quant' ? QUANT_TABS : TERMINAL_TABS;
+    const base = appMode === 'backtest'
+        ? BACKTEST_TABS
+        : appMode === 'quant'
+            ? QUANT_TABS
+            : TERMINAL_TABS;
+    return base.filter((tab) => STERN_ENABLED_TABS.has(tab.id));
 }
 
 /**
@@ -577,10 +608,10 @@ export function isTabIdVisible(
 /**
  * Get default tab for current mode
  */
-export function getDefaultTab(appMode: AppMode, fractalMode: FractalMode): string {
+export function getDefaultTab(appMode: AppMode, _fractalMode: FractalMode): string {
     if (appMode === 'backtest') return 'bt-cockpit';
-    if (appMode === 'quant') return 'quant-data-quality';
-    return fractalMode === 'dev' ? 'overview' : 'overview';
+    if (appMode === 'quant') return 'quant-market';
+    return 'overview';
 }
 
 /**
