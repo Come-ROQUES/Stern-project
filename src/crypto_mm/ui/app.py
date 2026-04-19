@@ -49,6 +49,8 @@ async def api_state_stream() -> StreamingResponse:
     async def event_stream() -> AsyncIterator[str]:
         async for snapshot in service.state_stream():
             if snapshot is None:
+                # Comment frames keep intermediaries and browsers from treating
+                # an idle SSE stream as dead while no fresh state is emitted.
                 yield ": keep-alive\n\n"
                 continue
             yield f"data: {json.dumps(snapshot)}\n\n"
@@ -161,6 +163,8 @@ async def spa_fallback(path: str) -> Response:
         candidate = FRONTEND_DIST / path
         if candidate.exists() and candidate.is_file():
             return FileResponse(candidate)
+        # Client-side routes (tabs, deep links) must all resolve to the same
+        # built index so React Router can take over after the first response.
         return FileResponse(FRONTEND_DIST / "index.html", headers=HTML_HEADERS)
     return HTMLResponse(_fallback_html(), headers=HTML_HEADERS)
 

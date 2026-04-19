@@ -239,6 +239,8 @@ function ensureStream(): void {
   stream = new EventSource(DEFAULT_STREAM_URL, { withCredentials: true });
   stream.onopen = () => {
     streamConnected = true;
+    // Once the stream is healthy we stop polling entirely so the dashboard
+    // returns to a single transport path instead of running both in parallel.
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
@@ -257,6 +259,8 @@ function ensureStream(): void {
   stream.onerror = () => {
     closeStream();
     scheduleStreamRetry();
+    // Fail soft: fall back to polling immediately so mounted panels keep
+    // receiving data while the browser retries the EventSource connection.
     if (listeners.size > 0 && !inFlight && !pollTimer) {
       inFlight = runPoll();
     }
