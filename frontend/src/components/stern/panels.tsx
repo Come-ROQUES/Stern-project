@@ -16,6 +16,7 @@ import {
   useSternState,
   type BookLevel,
   type MidPoint,
+  type PortfolioSnapshot,
   type PublicTrade,
   type QuantLabSnapshot,
   type SimFill,
@@ -2228,108 +2229,500 @@ export function PriceChartPanel() {
 // ============================================================================
 
 function FillsTable({ fills }: { fills: SimFill[] }) {
+  const slice = fills.slice(0, 80);
+  const maxSize = useMemo(() => {
+    let m = 1e-9;
+    for (const f of slice) if (f.size > m) m = f.size;
+    return m;
+  }, [slice]);
+
   return (
-    <table className="glass-table w-full text-xs font-mono">
-      <thead>
-        <tr>
-          <th className="text-left">Time</th>
-          <th className="text-left">Side</th>
-          <th className="text-right">Price</th>
-          <th className="text-right">Size</th>
-          <th className="text-right">Notional</th>
-          <th className="text-left">Reason</th>
+    <table className="w-full text-[11px] font-mono">
+      <thead className="sticky top-0 bg-[#050510]/95 backdrop-blur-sm z-10">
+        <tr className="text-[9px] uppercase tracking-wider text-neutral-500 border-b border-white/[0.06]">
+          <th className="text-left font-normal px-2 py-1.5">Time</th>
+          <th className="text-left font-normal">Side</th>
+          <th className="text-right font-normal">Price</th>
+          <th className="text-right font-normal">Size</th>
+          <th className="text-right font-normal px-2">Notional</th>
+          <th className="text-left font-normal pr-2">Reason</th>
         </tr>
       </thead>
       <tbody>
-        {fills.slice(0, 50).map((fill, idx) => (
-          <tr key={`${fill.ts}-${idx}`}>
-            <td className="text-neutral-500">{formatClockTime(fill.ts)}</td>
-            <td
-              className={
-                fill.side === "buy" ? "text-emerald-300" : "text-rose-300"
-              }
+        {slice.map((fill, idx) => {
+          const sizeRatio = Math.min(1, fill.size / maxSize);
+          const isBuy = fill.side === "buy";
+          const notional = fill.price * fill.size;
+          return (
+            <tr
+              key={`${fill.ts}-${idx}`}
+              className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors"
             >
-              {fill.side}
-            </td>
-            <td className="text-right">{formatNumber(fill.price, 2)}</td>
-            <td className="text-right">{fill.size.toFixed(4)}</td>
-            <td className="text-right">
-              {formatUsd(fill.price * fill.size, 2)}
-            </td>
-            <td className="text-neutral-400">{fill.reason}</td>
-          </tr>
-        ))}
+              <td className="text-neutral-500 px-2 py-1 tabular-nums">
+                {formatClockTime(fill.ts)}
+              </td>
+              <td>
+                <span
+                  className={`inline-flex items-center px-1.5 py-[1px] rounded-sm text-[9px] font-semibold border ${
+                    isBuy
+                      ? "text-emerald-300 border-emerald-400/25 bg-emerald-500/5"
+                      : "text-rose-300 border-rose-400/25 bg-rose-500/5"
+                  }`}
+                >
+                  {isBuy ? "BUY" : "SELL"}
+                </span>
+              </td>
+              <td className="text-right tabular-nums text-neutral-200">
+                {formatNumber(fill.price, 2)}
+              </td>
+              <td className="text-right tabular-nums text-neutral-200 relative">
+                <div
+                  className="absolute inset-y-[3px] right-1 rounded-sm opacity-25 pointer-events-none"
+                  style={{
+                    width: `${sizeRatio * 42}%`,
+                    background: isBuy
+                      ? "rgba(34, 197, 94, 0.6)"
+                      : "rgba(239, 68, 68, 0.6)",
+                  }}
+                />
+                <span className="relative">{fill.size.toFixed(4)}</span>
+              </td>
+              <td className="text-right px-2 tabular-nums text-neutral-200">
+                {formatUsd(notional, 2)}
+              </td>
+              <td className="text-neutral-500 pr-2 truncate max-w-[140px]">
+                {fill.reason}
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
+  );
+}
+
+function PortfolioKpiTile({
+  label,
+  value,
+  accent,
+  hint,
+  gauge,
+}: {
+  label: string;
+  value: string;
+  accent?: "positive" | "negative" | "neutral";
+  hint?: string;
+  gauge?: { pct: number; tone: "good" | "warn" | "bad" };
+}) {
+  const color =
+    accent === "positive"
+      ? "text-emerald-300"
+      : accent === "negative"
+        ? "text-rose-300"
+        : "text-neutral-100";
+  return (
+    <div className="glass-panel p-2 flex flex-col gap-0.5 min-w-0">
+      <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+        {label}
+      </span>
+      <span
+        className={`text-base font-mono font-semibold tabular-nums ${color} truncate`}
+      >
+        {value}
+      </span>
+      {hint && (
+        <span className="text-[10px] text-neutral-500 truncate">{hint}</span>
+      )}
+      {gauge && (
+        <div className="h-1 rounded-sm overflow-hidden bg-white/[0.04] mt-0.5">
+          <div
+            className={`h-full ${
+              gauge.tone === "bad"
+                ? "bg-rose-500/70"
+                : gauge.tone === "warn"
+                  ? "bg-amber-500/70"
+                  : "bg-emerald-500/60"
+            }`}
+            style={{
+              width: `${Math.min(100, Math.max(0, gauge.pct * 100))}%`,
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PositionCard({
+  portfolio,
+  mid,
+}: {
+  portfolio: PortfolioSnapshot | undefined;
+  mid: number | null;
+}) {
+  const pos = portfolio?.position_btc ?? 0;
+  const side: "long" | "short" | "flat" =
+    pos > 1e-8 ? "long" : pos < -1e-8 ? "short" : "flat";
+  const sideColor =
+    side === "long"
+      ? "text-emerald-300"
+      : side === "short"
+        ? "text-rose-300"
+        : "text-neutral-400";
+  const sideBg =
+    side === "long"
+      ? "bg-emerald-500/10 border-emerald-400/25"
+      : side === "short"
+        ? "bg-rose-500/10 border-rose-400/25"
+        : "bg-white/[0.02] border-white/[0.04]";
+
+  const hasPosition = portfolio != null && side !== "flat";
+  const markToMarket =
+    hasPosition && mid != null
+      ? (mid - portfolio.avg_entry_price) * portfolio.position_btc
+      : null;
+  const distPct =
+    hasPosition && mid != null && portfolio.avg_entry_price > 0
+      ? ((mid - portfolio.avg_entry_price) / portfolio.avg_entry_price) * 100
+      : null;
+
+  return (
+    <div className="h-full grid grid-cols-3 gap-3 items-center">
+      <div
+        className={`h-full rounded-md border ${sideBg} px-2.5 py-1.5 flex flex-col justify-center min-w-0`}
+      >
+        <span
+          className={`text-[10px] font-semibold tracking-[0.14em] uppercase ${sideColor}`}
+        >
+          {side}
+        </span>
+        <span className="text-lg font-mono font-semibold tabular-nums text-neutral-100 truncate">
+          {formatBtc(Math.abs(pos), 4)}
+        </span>
+        <span className="text-[10px] text-neutral-500 truncate">
+          {formatUsd(portfolio?.exposure_usd, 0)} exposure
+        </span>
+      </div>
+      <div className="flex flex-col gap-1 text-[11px] font-mono min-w-0">
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Avg entry
+          </span>
+          <span className="tabular-nums text-neutral-200 truncate">
+            {formatUsd(portfolio?.avg_entry_price, 2)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Mid
+          </span>
+          <span className="tabular-nums text-neutral-200 truncate">
+            {formatUsd(mid, 2)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Drift
+          </span>
+          <span
+            className={`tabular-nums truncate ${
+              distPct == null
+                ? "text-neutral-600"
+                : distPct >= 0
+                  ? "text-emerald-300"
+                  : "text-rose-300"
+            }`}
+          >
+            {distPct == null
+              ? "—"
+              : `${distPct >= 0 ? "+" : ""}${distPct.toFixed(2)}%`}
+          </span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1 text-[11px] font-mono min-w-0">
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Cash
+          </span>
+          <span className="tabular-nums text-neutral-200 truncate">
+            {formatUsd(portfolio?.cash, 0)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            MTM
+          </span>
+          <span
+            className={`tabular-nums truncate ${
+              markToMarket == null
+                ? "text-neutral-600"
+                : markToMarket >= 0
+                  ? "text-emerald-300"
+                  : "text-rose-300"
+            }`}
+          >
+            {markToMarket == null ? "—" : formatUsd(markToMarket, 2)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Unrealized
+          </span>
+          <span
+            className={`tabular-nums truncate ${
+              !portfolio
+                ? "text-neutral-600"
+                : portfolio.unrealized_pnl >= 0
+                  ? "text-emerald-300"
+                  : "text-rose-300"
+            }`}
+          >
+            {formatUsd(portfolio?.unrealized_pnl ?? 0, 2)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FillFlowStats({ fills }: { fills: SimFill[] }) {
+  const stats = useMemo(() => {
+    let buyCount = 0;
+    let sellCount = 0;
+    let buyVol = 0;
+    let sellVol = 0;
+    let buyNotional = 0;
+    let sellNotional = 0;
+    for (const f of fills) {
+      const notional = f.price * f.size;
+      if (f.side === "buy") {
+        buyCount += 1;
+        buyVol += f.size;
+        buyNotional += notional;
+      } else {
+        sellCount += 1;
+        sellVol += f.size;
+        sellNotional += notional;
+      }
+    }
+    const totalVol = buyVol + sellVol;
+    const buyPct = totalVol > 0 ? buyVol / totalVol : 0.5;
+    const avgSize = fills.length > 0 ? totalVol / fills.length : 0;
+    const vwapBuy = buyVol > 0 ? buyNotional / buyVol : null;
+    const vwapSell = sellVol > 0 ? sellNotional / sellVol : null;
+    return {
+      buyCount,
+      sellCount,
+      buyVol,
+      sellVol,
+      buyNotional,
+      sellNotional,
+      totalVol,
+      buyPct,
+      avgSize,
+      count: fills.length,
+      vwapBuy,
+      vwapSell,
+    };
+  }, [fills]);
+
+  return (
+    <div className="h-full grid grid-cols-2 gap-4">
+      <div className="flex flex-col justify-center gap-2 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+            Fills
+          </span>
+          <span className="text-lg font-mono font-semibold tabular-nums text-neutral-100">
+            {stats.count}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[10px] font-mono">
+          <span className="text-emerald-300 tabular-nums">
+            BUY {stats.buyCount}
+          </span>
+          <span className="text-rose-300 tabular-nums">
+            SELL {stats.sellCount}
+          </span>
+        </div>
+        <div className="relative h-2 rounded-sm overflow-hidden bg-white/[0.02] border border-white/[0.04]">
+          <div
+            className="absolute inset-y-0 left-0 bg-emerald-500/60"
+            style={{ width: `${stats.buyPct * 100}%` }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 bg-rose-500/60"
+            style={{ width: `${(1 - stats.buyPct) * 100}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
+          <span>{formatBtc(stats.buyVol, 4)}</span>
+          <span>{formatBtc(stats.sellVol, 4)}</span>
+        </div>
+      </div>
+      <div className="flex flex-col gap-1 text-[11px] font-mono justify-center min-w-0">
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Volume
+          </span>
+          <span className="tabular-nums text-neutral-200 truncate">
+            {formatBtc(stats.totalVol, 4)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            Avg size
+          </span>
+          <span className="tabular-nums text-neutral-200 truncate">
+            {formatBtc(stats.avgSize, 4)}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            VWAP buy
+          </span>
+          <span className="tabular-nums text-emerald-300/90 truncate">
+            {stats.vwapBuy != null ? formatUsd(stats.vwapBuy, 2) : "—"}
+          </span>
+        </div>
+        <div className="flex justify-between items-baseline gap-2">
+          <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
+            VWAP sell
+          </span>
+          <span className="tabular-nums text-rose-300/90 truncate">
+            {stats.vwapSell != null ? formatUsd(stats.vwapSell, 2) : "—"}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export function PortfolioPanel() {
   const { data: state } = useSternState();
   const portfolio = state?.portfolio;
+  const bt = state?.backtest_lite;
+  const cfg = state?.strategy.config;
   const totalPnl = portfolio
     ? portfolio.realized_pnl + portfolio.unrealized_pnl
     : 0;
 
+  const startingEquity =
+    bt && bt.equity_curve.length > 0 ? bt.equity_curve[0] : portfolio?.cash ?? 0;
+  const currentEquity = portfolio?.equity ?? startingEquity;
+  const returnPct =
+    startingEquity > 0
+      ? ((currentEquity - startingEquity) / startingEquity) * 100
+      : 0;
+
+  const exposurePct = cfg?.max_notional_exposure
+    ? Math.min(1, (portfolio?.exposure_usd ?? 0) / cfg.max_notional_exposure)
+    : 0;
+  const drawdownPct = cfg?.max_loss
+    ? Math.min(1, (portfolio?.drawdown ?? 0) / cfg.max_loss)
+    : 0;
+
+  const exposureTone: "good" | "warn" | "bad" =
+    exposurePct > 0.8 ? "bad" : exposurePct > 0.5 ? "warn" : "good";
+  const drawdownTone: "good" | "warn" | "bad" =
+    drawdownPct > 0.8 ? "bad" : drawdownPct > 0.5 ? "warn" : "good";
+
   return (
     <TabShell
       title="Portfolio"
-      subtitle="Paper MM session — position, PnL and simulated fills"
+      subtitle="Paper MM session — position, PnL, equity curve and fills"
     >
-      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2 flex-shrink-0">
-        <Panel>
-          <Kpi
-            label="Position"
-            value={formatBtc(portfolio?.position_btc ?? 0, 4)}
-            accent={portfolio ? sign(portfolio.position_btc) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Avg Entry"
-            value={formatUsd(portfolio?.avg_entry_price, 2)}
-          />
-        </Panel>
-        <Panel>
-          <Kpi label="Exposure" value={formatUsd(portfolio?.exposure_usd, 2)} />
-        </Panel>
-        <Panel>
-          <Kpi label="Cash" value={formatUsd(portfolio?.cash, 2)} />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Realized"
-            value={formatUsd(portfolio?.realized_pnl, 2)}
-            accent={portfolio ? sign(portfolio.realized_pnl) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Unrealized"
-            value={formatUsd(portfolio?.unrealized_pnl, 2)}
-            accent={portfolio ? sign(portfolio.unrealized_pnl) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Total PnL"
-            value={formatUsd(totalPnl, 2)}
-            accent={sign(totalPnl)}
-          />
-        </Panel>
-        <Panel>
-          <Kpi label="Equity" value={formatUsd(portfolio?.equity, 2)} />
-        </Panel>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 flex-shrink-0">
+        <PortfolioKpiTile
+          label="Total PnL"
+          value={formatUsd(totalPnl, 2)}
+          accent={sign(totalPnl)}
+          hint={`r ${formatUsd(portfolio?.realized_pnl ?? 0, 0)} · u ${formatUsd(portfolio?.unrealized_pnl ?? 0, 0)}`}
+        />
+        <PortfolioKpiTile
+          label="Return"
+          value={formatPct(returnPct, 3)}
+          accent={sign(returnPct)}
+          hint={bt?.status === "ready" ? "live paper" : "warming up"}
+        />
+        <PortfolioKpiTile
+          label="Equity"
+          value={formatUsd(currentEquity, 0)}
+          hint={`peak ${formatUsd(bt?.peak_equity_usd ?? currentEquity, 0)}`}
+        />
+        <PortfolioKpiTile
+          label="Position"
+          value={formatBtc(portfolio?.position_btc ?? 0, 4)}
+          accent={portfolio ? sign(portfolio.position_btc) : "neutral"}
+          hint={
+            !portfolio || portfolio.position_btc === 0
+              ? "flat"
+              : portfolio.position_btc > 0
+                ? "long"
+                : "short"
+          }
+        />
+        <PortfolioKpiTile
+          label="Exposure"
+          value={formatUsd(portfolio?.exposure_usd, 0)}
+          hint={cfg ? `cap ${formatUsd(cfg.max_notional_exposure, 0)}` : undefined}
+          gauge={{ pct: exposurePct, tone: exposureTone }}
+        />
+        <PortfolioKpiTile
+          label="Drawdown"
+          value={formatUsd(portfolio?.drawdown, 0)}
+          accent={
+            portfolio && portfolio.drawdown > 0 ? "negative" : "neutral"
+          }
+          hint={cfg ? `cap ${formatUsd(cfg.max_loss, 0)}` : undefined}
+          gauge={{ pct: drawdownPct, tone: drawdownTone }}
+        />
       </div>
-      <Panel
-        title="Simulated fills"
-        subtitle="Most recent MM paper executions"
-        className="flex-1"
-      >
-        <div className="glass-scroll h-full overflow-auto">
-          <FillsTable fills={state?.fills ?? []} />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0">
+        <div className="lg:col-span-7 flex flex-col gap-2 min-h-0">
+          <Panel
+            title="Equity curve"
+            subtitle="Paper session equity over time"
+            className="flex-1 min-h-0"
+          >
+            <EquityCurveHero
+              equityCurve={bt?.equity_curve ?? []}
+              peakEquity={bt?.peak_equity_usd ?? currentEquity}
+              currentEquity={currentEquity}
+              returnPct={returnPct}
+              drawdownUsd={portfolio?.drawdown ?? 0}
+            />
+          </Panel>
+          <Panel
+            title="Position"
+            subtitle="Inventory, avg entry and mark-to-market drift"
+            className="flex-shrink-0 h-[128px]"
+          >
+            <PositionCard
+              portfolio={portfolio}
+              mid={state?.mid_price ?? null}
+            />
+          </Panel>
         </div>
-      </Panel>
+        <div className="lg:col-span-5 flex flex-col gap-2 min-h-0">
+          <Panel
+            title="Session flow"
+            subtitle="Buy / sell split, avg fill size, VWAP"
+            className="flex-shrink-0 h-[128px]"
+          >
+            <FillFlowStats fills={state?.fills ?? []} />
+          </Panel>
+          <Panel
+            title="Simulated fills"
+            subtitle={`${state?.fills.length ?? 0} paper executions · newest first`}
+            className="flex-1 min-h-0"
+          >
+            <div className="glass-scroll h-full overflow-auto">
+              <FillsTable fills={state?.fills ?? []} />
+            </div>
+          </Panel>
+        </div>
+      </div>
     </TabShell>
   );
 }
