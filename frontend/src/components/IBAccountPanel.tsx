@@ -12,7 +12,7 @@
  * - Positions & Exposure
  * - Global status badge (OK / WARNING / BLOCKING)
  *
- * Author: FRACTAL Team
+ * Author: Stern Project Team
  * Date: 19 Dec 2024
  */
 

@@ -3644,7 +3644,7 @@ export const api = {
     ),
   getGuardianStatus: (ctx: ActiveContext = activeContext, scope: DataScope = defaultScope) =>
     fetchJsonSafe<GuardianStatus>("/api/system/guardian", {
-      service_name: "fractal-orphan-guard-a1",
+      service_name: "stern-orphan-guard-a1",
       service_checked: false,
       service_state: "unknown",
       running: false,

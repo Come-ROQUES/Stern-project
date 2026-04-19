@@ -7,7 +7,7 @@
  * 1. Sensitivity Bars (impact of each param on PnL)
  * 2. 3D Surface (optional, param1 x param2 -> metric)
  * 
- * NOTE: Sweeps run on A1 (fractal-ui), not x86. This page displays results only.
+ * NOTE: Sweeps run on the compute host, not x86. This page displays results only.
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -209,8 +209,8 @@ export function ParameterTuning() {
                                         Run sweep on A1
                                     </div>
                                     <code className="text-xs text-slate-300 block bg-black/30 rounded p-2 font-mono">
-                                        ssh fractal-ui<br />
-                                        cd ~/fractal-compute<br />
+                                        ssh &lt;compute-host&gt;<br />
+                                        cd ~/compute-workspace<br />
                                         ./run_sweep.sh
                                     </code>
                                     <p className="text-xs text-slate-400 mt-2">

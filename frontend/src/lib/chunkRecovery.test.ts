@@ -7,7 +7,7 @@ describe("isRecoverableLazyChunkError", () => {
     expect(
       isRecoverableLazyChunkError(
         new Error(
-          "Failed to fetch dynamically imported module: https://fractalfx.duckdns.org/react/assets/BacktestLaunch-DHaErkvW.js"
+          "Failed to fetch dynamically imported module: https://stern-project.duckdns.org/react/assets/BacktestLaunch-DHaErkvW.js"
         )
       )
     ).toBe(true);

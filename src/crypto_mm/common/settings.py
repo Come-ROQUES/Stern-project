@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Application settings loaded from environment variables and `.env`."""
+
     debug: bool = True
     host: str = "0.0.0.0"
     port: int = 8015
@@ -27,6 +29,8 @@ class Settings(BaseSettings):
     @field_validator("debug", mode="before")
     @classmethod
     def _coerce_debug(cls, value: Any) -> Any:
+        """Accept common truthy strings for local development toggles."""
+
         if not isinstance(value, str):
             return value
         return value.strip().lower() in {"1", "true", "yes", "on", "debug", "dev"}

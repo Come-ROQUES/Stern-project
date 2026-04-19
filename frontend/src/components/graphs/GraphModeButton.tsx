@@ -1,8 +1,8 @@
 import React from "react";
-import { useFractalMode } from "../HeaderControls";
+import { useDeskMode } from "../HeaderControls";
 
 export function GraphModeButton({ to }: { to: string }) {
-  const { setAppMode } = useFractalMode();
+  const { setAppMode } = useDeskMode();
   return (
     <button
       type="button"

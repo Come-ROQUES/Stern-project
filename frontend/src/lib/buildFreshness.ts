@@ -1,4 +1,4 @@
-const STALE_INDEX_RECOVERY_KEY = "fractal.stale_index_recovery";
+const STALE_INDEX_RECOVERY_KEY = "stern.stale_index_recovery";
 
 export function extractIndexAssetFromHtml(html: string): string | null {
   const match = html.match(/src="\/react\/assets\/(index-[^"]+\.js)"/i);

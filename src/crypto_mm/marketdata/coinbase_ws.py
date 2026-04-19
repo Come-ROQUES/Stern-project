@@ -31,6 +31,8 @@ STATE_PUBLISH_INTERVAL_S = 0.10
 
 
 class MarketDataService:
+    """Own the live feed loop, derived analytics and UI state publication."""
+
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._started_at = datetime.now(tz=UTC)
@@ -68,7 +70,10 @@ class MarketDataService:
                 max_loss=settings.max_loss,
             ),
         )
+
     async def run_forever(self) -> None:
+        """Reconnect forever so the local dashboard survives feed interruptions."""
+
         while True:
             try:
                 await self._run_once()
@@ -77,6 +82,8 @@ class MarketDataService:
                 await asyncio.sleep(2)
 
     async def _run_once(self) -> None:
+        """Open subscriptions and process the Coinbase websocket stream."""
+
         async with websockets.connect(
             self._settings.ws_url,
             ping_interval=20,
@@ -134,6 +141,8 @@ class MarketDataService:
         self._publish_state()
 
     def _realized_vol_bps(self) -> float:
+        """Estimate realized volatility from recent mid-price returns in bps."""
+
         mid_values = [float(point["mid_price"]) for point in list(self.mid_history)[-150:]]
         if len(mid_values) < 2:
             return 0.0
@@ -143,6 +152,8 @@ class MarketDataService:
         return sqrt(mean(ret * ret for ret in returns))
 
     async def _handle_l2_message(self, message: dict[str, object]) -> None:
+        """Apply order book snapshots or incremental updates from the feed."""
+
         events = message.get("events", [])
         if not isinstance(events, list):
             return
@@ -188,6 +199,8 @@ class MarketDataService:
                         )
 
     def _refresh_quote_preview(self) -> None:
+        """Publish a provisional quote during long snapshot hydration."""
+
         mid = self.order_book.mid_price()
         if mid is None:
             return
@@ -213,6 +226,8 @@ class MarketDataService:
         )
 
     def _maybe_refresh_analytics(self, mid: float, quote_active: bool) -> None:
+        """Throttle heavier analytics so market bursts do not starve the UI."""
+
         now = monotonic()
         if now - self._last_analytics_at < FAST_ANALYTICS_INTERVAL_S:
             return
@@ -227,6 +242,8 @@ class MarketDataService:
         self._record_live_snapshots(mid=mid, quote_active=quote is not None and quote_active)
 
     def _publish_state(self, force: bool = False) -> None:
+        """Signal state updates to polling and streaming consumers."""
+
         now = monotonic()
         if not force and now - self._last_publish_at < STATE_PUBLISH_INTERVAL_S:
             return
@@ -235,6 +252,8 @@ class MarketDataService:
         self._state_event.set()
 
     def _handle_market_trades_message(self, message: dict[str, object]) -> None:
+        """Normalize public trades and run fill simulation against active quotes."""
+
         events = message.get("events", [])
         if not isinstance(events, list):
             return

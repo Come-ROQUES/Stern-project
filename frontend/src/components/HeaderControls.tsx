@@ -4,7 +4,7 @@
  * Contains:
  * - Run selector (existing RunBanner logic)
  * - Research Mode toggle
- * - FRACTAL_MODE badge
+ * - mode badge
  * - Quick actions
  */
 
@@ -16,38 +16,38 @@ import React, {
     useMemo,
     useState,
 } from 'react';
-import type { AppMode, FractalMode } from '../lib/navModel';
+import type { AppMode, DeskMode } from '../lib/navModel';
 import { GlassBadge } from './ui/glass';
 import { cn } from '../lib/utils';
 
 // =============================================================================
-// FRACTAL_MODE Context
+// Desk mode context
 // =============================================================================
 
-interface FractalModeContextType {
-    mode: FractalMode;
-    setMode: (mode: FractalMode) => void;
+interface DeskModeContextType {
+    mode: DeskMode;
+    setMode: (mode: DeskMode) => void;
     researchModeEnabled: boolean;
     setResearchModeEnabled: (enabled: boolean) => void;
     appMode: AppMode;
     setAppMode: (mode: AppMode) => void;
 }
 
-const FractalModeContext = createContext<FractalModeContextType | null>(null);
+const DeskModeContext = createContext<DeskModeContextType | null>(null);
 
-const STORAGE_KEY_MODE = 'fractal.mode';
-const STORAGE_KEY_RESEARCH = 'fractal.researchMode';
-const STORAGE_KEY_APP_MODE = 'fractal.appMode';
+const STORAGE_KEY_MODE = 'stern.mode';
+const STORAGE_KEY_RESEARCH = 'stern.researchMode';
+const STORAGE_KEY_APP_MODE = 'stern.appMode';
 
-export function FractalModeProvider({ children }: { children: React.ReactNode }) {
+export function DeskModeProvider({ children }: { children: React.ReactNode }) {
     // Initialize from localStorage or env
-    const [mode, setModeState] = useState<FractalMode>(() => {
+    const [mode, setModeState] = useState<DeskMode>(() => {
         const stored = localStorage.getItem(STORAGE_KEY_MODE);
         if (stored === 'prod' || stored === 'research' || stored === 'dev') {
             return stored;
         }
         // Check env-based default
-        const envMode = (import.meta as any).env?.VITE_FRACTAL_MODE;
+        const envMode = (import.meta as any).env?.VITE_DESK_MODE;
         if (envMode === 'prod' || envMode === 'research' || envMode === 'dev') {
             return envMode;
         }
@@ -65,7 +65,7 @@ export function FractalModeProvider({ children }: { children: React.ReactNode })
         return 'terminal';
     });
 
-    const setMode = useCallback((newMode: FractalMode) => {
+    const setMode = useCallback((newMode: DeskMode) => {
         setModeState((prev) => {
             if (prev === newMode) {
                 return prev;
@@ -123,26 +123,26 @@ export function FractalModeProvider({ children }: { children: React.ReactNode })
     );
 
     return (
-        <FractalModeContext.Provider value={value}>
+        <DeskModeContext.Provider value={value}>
             {children}
-        </FractalModeContext.Provider>
+        </DeskModeContext.Provider>
     );
 }
 
-export function useFractalMode() {
-    const ctx = useContext(FractalModeContext);
+export function useDeskMode() {
+    const ctx = useContext(DeskModeContext);
     if (!ctx) {
-        throw new Error('useFractalMode must be used within FractalModeProvider');
+        throw new Error('useDeskMode must be used within DeskModeProvider');
     }
     return ctx;
 }
 
 // =============================================================================
-// ModeBadge - Shows current FRACTAL_MODE
+// ModeBadge - Shows current desk mode
 // =============================================================================
 
 interface ModeBadgeProps {
-    mode: FractalMode;
+    mode: DeskMode;
     size?: 'sm' | 'md';
 }
 
@@ -268,7 +268,7 @@ export function HeaderControls({
         setResearchModeEnabled,
         appMode,
         setAppMode,
-    } = useFractalMode();
+    } = useDeskMode();
     const handleAppModeChange = onAppModeChange ?? setAppMode;
 
     return (

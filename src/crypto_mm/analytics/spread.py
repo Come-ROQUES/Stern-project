@@ -9,6 +9,8 @@ DEPTH_SIZES = (0.1, 1.0, 5.0, 10.0)
 
 
 def compute_depth_spreads(order_book: OrderBook) -> dict[float, float | None]:
+    """Compute effective bid/ask spread for several executable order sizes."""
+
     spreads: dict[float, float | None] = {}
     for size in DEPTH_SIZES:
         buy_cost = order_book.cost_to_buy(size)
@@ -21,18 +23,24 @@ def compute_depth_spreads(order_book: OrderBook) -> dict[float, float | None]:
 
 
 class SpreadTracker:
+    """Maintain rolling spread history and summary statistics by depth."""
+
     def __init__(self, maxlen: int = 2_000) -> None:
         self._history: dict[float, deque[float]] = {
             size: deque(maxlen=maxlen) for size in DEPTH_SIZES
         }
 
     def record(self, spreads: dict[float, float | None]) -> None:
+        """Append the latest valid spread measurements to the rolling buffers."""
+
         for size, spread in spreads.items():
             if spread is None:
                 continue
             self._history[size].append(spread)
 
     def summary(self) -> dict[str, dict[str, float | None]]:
+        """Return last, average, median, min and max spread by tracked depth."""
+
         result: dict[str, dict[str, float | None]] = {}
         for size, values in self._history.items():
             key = _fmt_size(size)
@@ -58,6 +66,8 @@ class SpreadTracker:
         return result
 
     def tail(self, points: int = 40) -> dict[str, list[float]]:
+        """Return the most recent spread samples for charting and CSV export."""
+
         return {
             _fmt_size(size): list(values)[-points:] for size, values in self._history.items()
         }

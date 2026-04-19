@@ -25,6 +25,8 @@ HTML_HEADERS = {"Cache-Control": "no-store, max-age=0"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the market data service with the FastAPI application lifecycle."""
+
     task = asyncio.create_task(service.run_forever())
     try:
         yield
@@ -34,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await task
 
 
-app = FastAPI(title="Fractal Crypto Desk", lifespan=lifespan)
+app = FastAPI(title="Crypto Trading Desk", lifespan=lifespan)
 
 
 @app.get("/api/state")
@@ -120,6 +122,8 @@ async def export_spreads_csv() -> StreamingResponse:
 
 
 def _csv_response(buffer: io.StringIO, filename: str) -> StreamingResponse:
+    """Wrap a prepared CSV buffer in a downloadable HTTP response."""
+
     buffer.seek(0)
     return StreamingResponse(
         iter([buffer.getvalue()]),
@@ -129,6 +133,8 @@ def _csv_response(buffer: io.StringIO, filename: str) -> StreamingResponse:
 
 
 def _stamp() -> str:
+    """Build a UTC timestamp suitable for exported filenames."""
+
     return datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
@@ -166,7 +172,7 @@ def _fallback_html() -> str:
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Fractal Crypto Desk</title>
+    <title>Crypto Trading Desk</title>
     <style>
       body {
         margin: 0;

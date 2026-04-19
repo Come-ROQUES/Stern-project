@@ -10,12 +10,12 @@ export type BundleRunsState = {
 };
 
 const STORAGE_KEYS = {
-  enabled: "fractal.bundle.enabled",
-  dw: "fractal.bundle.dwRunId",
-  s2: "fractal.bundle.s2RunId",
-  s2Auto: "fractal.bundle.s2AutoRunId",
-  tf: "fractal.bundle.tfRunId",
-  tfAuto: "fractal.bundle.tfAutoRunId",
+  enabled: "stern.bundle.enabled",
+  dw: "stern.bundle.dwRunId",
+  s2: "stern.bundle.s2RunId",
+  s2Auto: "stern.bundle.s2AutoRunId",
+  tf: "stern.bundle.tfRunId",
+  tfAuto: "stern.bundle.tfAutoRunId",
 };
 
 let initialized = false;

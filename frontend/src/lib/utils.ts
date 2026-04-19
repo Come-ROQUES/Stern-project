@@ -1,5 +1,5 @@
 /**
- * Utility functions for FRACTAL Dashboard
+ * Utility functions for the Stern dashboard
  */
 
 import { clsx, type ClassValue } from 'clsx';

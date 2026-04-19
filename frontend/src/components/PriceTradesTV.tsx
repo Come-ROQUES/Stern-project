@@ -221,12 +221,12 @@ export async function prewarmPriceTradesPanel(
 
 // LocalStorage keys
 const STORAGE_KEYS = {
-  showAccepted: 'fractal_chart_showAccepted',
-  showRefused: 'fractal_chart_showRefused',
-  showTpSl: 'fractal_chart_showTpSl',
-  showSpread: 'fractal_chart_showSpread',
-  showSessions: 'fractal_chart_showSessions',
-  showTradePaths: 'fractal_chart_showTradePaths',
+  showAccepted: 'stern_chart_showAccepted',
+  showRefused: 'stern_chart_showRefused',
+  showTpSl: 'stern_chart_showTpSl',
+  showSpread: 'stern_chart_showSpread',
+  showSessions: 'stern_chart_showSessions',
+  showTradePaths: 'stern_chart_showTradePaths',
 };
 
 const getStoredToggles = (): ChartToggles => {

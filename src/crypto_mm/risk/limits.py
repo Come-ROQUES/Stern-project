@@ -7,10 +7,14 @@ from crypto_mm.portfolio.ledger import PortfolioState
 
 @dataclass(slots=True)
 class RiskLimits:
+    """Simple guardrails used to decide whether quoting may continue."""
+
     max_notional_exposure: float
     max_loss: float
 
     def can_quote(self, portfolio: PortfolioState, mark_price: float) -> tuple[bool, str]:
+        """Validate exposure and drawdown constraints against current marks."""
+
         snapshot = portfolio.snapshot(mark_price)
         exposure = abs(float(snapshot["exposure_usd"]))
         total_pnl = float(snapshot["realized_pnl"]) + float(snapshot["unrealized_pnl"])
@@ -19,4 +23,3 @@ class RiskLimits:
         if total_pnl <= -self.max_loss:
             return False, "max_loss_breached"
         return True, "ok"
-

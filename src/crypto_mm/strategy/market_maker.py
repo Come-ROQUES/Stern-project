@@ -10,6 +10,8 @@ from crypto_mm.risk.limits import RiskLimits
 
 @dataclass(slots=True)
 class MarketMakerConfig:
+    """Parameters controlling quote width, size and inventory skew."""
+
     base_quote_spread_bps: float
     order_size_btc: float
     position_skew_bps_per_btc: float
@@ -18,6 +20,8 @@ class MarketMakerConfig:
 
 
 class MarketMaker:
+    """Generate synthetic quotes and simulate fills from the public tape."""
+
     def __init__(
         self, config: MarketMakerConfig, portfolio: PortfolioState, risk_limits: RiskLimits
     ) -> None:
@@ -53,6 +57,8 @@ class MarketMaker:
     def update_quote(
         self, mid_price: float, realized_vol_bps: float = 0.0
     ) -> Quote | None:
+        """Refresh the active quote from the latest mid-price and risk state."""
+
         can_quote, reason = self._risk_limits.can_quote(self._portfolio, mid_price)
         self._risk_status = reason
         self._last_vol_bps = max(0.0, realized_vol_bps)
@@ -84,6 +90,8 @@ class MarketMaker:
         return quote
 
     def maybe_fill(self, trade: PublicTrade) -> SimFill | None:
+        """Simulate a fill when an observed trade crosses the quoted prices."""
+
         if self._last_quote is None:
             return None
 
@@ -110,4 +118,3 @@ class MarketMaker:
             return fill
 
         return None
-

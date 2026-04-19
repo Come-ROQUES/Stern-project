@@ -16,7 +16,7 @@
  * which tab set is exposed.
  */
 
-export type FractalMode = 'prod' | 'research' | 'dev';
+export type DeskMode = 'prod' | 'research' | 'dev';
 export type AppMode = 'terminal' | 'quant' | 'backtest';
 export type NavSection = 'DESK' | 'QUANT' | 'SYSTEM' | 'BACKTEST';
 
@@ -27,7 +27,7 @@ export interface NavTab {
     question: string; // Optional descriptive copy (unused in UI)
     icon: string; // Lucide icon name
     requiresRunId: boolean;
-    visibleInModes: FractalMode[];
+    visibleInModes: DeskMode[];
     requiresResearchToggle: boolean; // Only visible when Research Mode is ON
     deprecated?: boolean;
     featureGroup?: 'terminal' | 'quant' | 'backtest'; // Explicit grouping to avoid cross-mode leakage
@@ -504,7 +504,7 @@ export const BACKTEST_TABS: NavTab[] = [
 /**
  * Stern (crypto MM) whitelist: tabs whose data source exists in /api/state.
  * Everything not in this set is hidden even if declared above, keeping the
- * Fractal shell intact without exposing FX-only panels with no backend.
+ * Keep the shell intact without exposing FX-only panels with no backend.
  */
 const STERN_ENABLED_TABS: ReadonlySet<string> = new Set<string>([
     // Terminal
@@ -536,13 +536,13 @@ export function getTabsForMode(appMode: AppMode): NavTab[] {
  */
 export function getVisibleTabs(
     appMode: AppMode,
-    fractalMode: FractalMode,
+    deskMode: DeskMode,
     researchModeEnabled: boolean
 ): NavTab[] {
     const tabs = getTabsForMode(appMode);
     return tabs.filter((tab) => {
         // Check if tab is visible in current mode
-        if (!tab.visibleInModes.includes(fractalMode)) return false;
+        if (!tab.visibleInModes.includes(deskMode)) return false;
 
         // Check if tab requires research toggle
         if (tab.requiresResearchToggle && !researchModeEnabled) return false;
@@ -559,10 +559,10 @@ export function getVisibleTabs(
  */
 export function getTabsBySection(
     appMode: AppMode,
-    fractalMode: FractalMode,
+    deskMode: DeskMode,
     researchModeEnabled: boolean
 ): Record<NavSection, NavTab[]> {
-    const visibleTabs = getVisibleTabs(appMode, fractalMode, researchModeEnabled);
+    const visibleTabs = getVisibleTabs(appMode, deskMode, researchModeEnabled);
 
     return {
         DESK: visibleTabs.filter((t) => t.section === 'DESK'),
@@ -578,13 +578,13 @@ export function getTabsBySection(
 export function isTabVisible(
     tab: NavTab,
     appMode: AppMode,
-    fractalMode: FractalMode,
+    deskMode: DeskMode,
     researchModeEnabled: boolean
 ): boolean {
     if (appMode === 'quant' && tab.featureGroup !== 'quant') return false;
     if (appMode === 'terminal' && tab.featureGroup !== 'terminal') return false;
     if (appMode === 'backtest' && tab.featureGroup !== 'backtest') return false;
-    if (!tab.visibleInModes.includes(fractalMode)) return false;
+    if (!tab.visibleInModes.includes(deskMode)) return false;
     if (tab.requiresResearchToggle && !researchModeEnabled) return false;
     if (tab.deprecated) return false;
 
@@ -597,18 +597,18 @@ export function isTabVisible(
 export function isTabIdVisible(
     tabId: string,
     appMode: AppMode,
-    fractalMode: FractalMode,
+    deskMode: DeskMode,
     researchModeEnabled: boolean
 ): boolean {
     const tab = getTabsForMode(appMode).find((t) => t.id === tabId);
     if (!tab) return false;
-    return isTabVisible(tab, appMode, fractalMode, researchModeEnabled);
+    return isTabVisible(tab, appMode, deskMode, researchModeEnabled);
 }
 
 /**
  * Get default tab for current mode
  */
-export function getDefaultTab(appMode: AppMode, _fractalMode: FractalMode): string {
+export function getDefaultTab(appMode: AppMode, _deskMode: DeskMode): string {
     if (appMode === 'backtest') return 'bt-cockpit';
     if (appMode === 'quant') return 'quant-market';
     return 'overview';

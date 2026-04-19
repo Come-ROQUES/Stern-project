@@ -7,6 +7,8 @@ from crypto_mm.ui.app import app
 
 
 def main() -> None:
+    """Start the HTTP server for the local trading desk application."""
+
     uvicorn.run(
         app,
         host=settings.host,
@@ -17,4 +19,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

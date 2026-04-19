@@ -1,4 +1,4 @@
-const LAZY_CHUNK_RECOVERY_KEY = "fractal.lazy_chunk_recovery_once";
+const LAZY_CHUNK_RECOVERY_KEY = "stern.lazy_chunk_recovery_once";
 
 function normalizeErrorMessage(reason: unknown): string {
   if (reason instanceof Error) return reason.message || "";
@@ -36,7 +36,7 @@ function recoverLazyChunkOnce(assetHint: string | null = null): void {
 
 export function installLazyChunkRecovery(): void {
   if (typeof window === "undefined") return;
-  const marker = "__fractal_lazy_chunk_recovery_installed";
+  const marker = "__stern_lazy_chunk_recovery_installed";
   if ((window as typeof window & { [key: string]: unknown })[marker]) {
     return;
   }

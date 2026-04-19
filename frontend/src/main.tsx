@@ -10,9 +10,9 @@ import { ensureUiStateVersion } from "./lib/uiStateVersion";
 if (
   typeof window !== "undefined" &&
   typeof HTMLCanvasElement !== "undefined" &&
-  !(HTMLCanvasElement.prototype as any).__fractal_wrf_patched
+  !(HTMLCanvasElement.prototype as any).__stern_wrf_patched
 ) {
-  (HTMLCanvasElement.prototype as any).__fractal_wrf_patched = true;
+  (HTMLCanvasElement.prototype as any).__stern_wrf_patched = true;
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
   (HTMLCanvasElement.prototype as any).getContext = function (
     contextId: string,

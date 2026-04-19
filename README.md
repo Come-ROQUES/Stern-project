@@ -1,24 +1,23 @@
+## Presentation
+
+Application de simulation pour un desk crypto, construite autour d'un flux
+temps reel Coinbase, d'un moteur simple de tenue de marche et d'un tableau de
+bord web pour suivre l'etat du carnet, des trades et du PnL.
+
 ## Fonctionnalites
 
 - connexion WebSocket publique Coinbase sur `BTC-USD`
 - reconstruction d'un carnet `level2`
 - ingestion du flux de trades
-- calcul du spread moyen, median, min, max pour `0.1`, `1`, `5`, `10 BTC`
-- market making simule autour du mid-price
-- skew des quotes en fonction de la position
-- controles de risque:
+- calcul du spread moyen, median, minimum et maximum pour `0.1`, `1`, `5`, `10 BTC`
+- quoting simule autour du mid-price avec ajustement par position et volatilite
+- contraintes de risque:
   - exposition notionnelle max `1_000_000 USD`
   - perte max `100_000 USD`
 - backend FastAPI + frontend React/Vite
-- dashboard multi-onglets type terminal desk, inspire au maximum du langage
-  visuel FRACTAL:
-  - `Overview`
-  - `Market`
-  - `Strategy`
-  - `Quant Lab`
-  - `Backtest`
-- CI GitHub et deploiement GitHub-first pour VM
-- kit de publication web avec DuckDNS + nginx + systemd
+- cockpit web organise en vues `Overview`, `Market`, `Strategy`, `Quant Lab`
+  et `Backtest`
+- CI GitHub et kit de deploiement VM avec DuckDNS + nginx + systemd
 
 ## Architecture
 
@@ -32,9 +31,20 @@ src/crypto_mm/
   strategy/    market maker simule
   ui/          API FastAPI + serveur SPA React
 frontend/
-  src/         cockpit React type terminal
+  src/         cockpit React
   dist/        build Vite servi par FastAPI
 ```
+
+## Couverture du besoin
+
+- donnees de marche en temps reel: carnet `level2` et flux de trades Coinbase
+- visualisation live: top of book, trades recents, spread par profondeur
+- logique de market making: quotes bid/ask autour du mid-price
+- gestion d'inventaire: skew des quotes selon la position
+- contraintes de risque: controle d'exposition et coupure sur perte max
+- suivi PnL: executions, position ouverte, prix moyen, exposition, PnL realise
+  et latent
+- export: fichiers CSV pour spreads, fills et historique de portefeuille
 
 ## Demarrage local
 
@@ -67,6 +77,12 @@ Le repo contient un kit pour exposition publique sur une VM:
 ## Frontiere de confidentialite
 
 Voir `docs/CONFIDENTIALITY_BOUNDARY.md`.
+
+## Qualite du code
+
+Le coeur Python est structure par domaine (`marketdata`, `analytics`,
+`strategy`, `portfolio`, `risk`, `ui`) et documente par des docstrings courtes
+sur les composants principaux pour faciliter la lecture et la revue.
 
 ## Workflow recommande
 

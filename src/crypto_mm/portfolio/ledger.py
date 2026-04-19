@@ -9,6 +9,8 @@ from crypto_mm.portfolio.pnl import compute_exposure_usd, compute_unrealized_pnl
 
 @dataclass(slots=True)
 class PortfolioState:
+    """Track cash, inventory, realized PnL and simulated executions."""
+
     initial_cash: float
     cash: float
     position_btc: float = 0.0
@@ -18,6 +20,8 @@ class PortfolioState:
 
     @classmethod
     def bootstrap(cls, initial_cash: float, trade_history_limit: int) -> PortfolioState:
+        """Create a fresh portfolio seeded with the initial cash balance."""
+
         return cls(
             initial_cash=initial_cash,
             cash=initial_cash,
@@ -25,6 +29,8 @@ class PortfolioState:
         )
 
     def apply_fill(self, fill: SimFill) -> None:
+        """Apply one simulated fill and update cash, inventory and realized PnL."""
+
         signed_qty = fill.size if fill.side == "buy" else -fill.size
         self.cash -= signed_qty * fill.price
 
@@ -36,6 +42,8 @@ class PortfolioState:
         self.fills.append(fill)
 
     def snapshot(self, mark_price: float) -> dict[str, float | str]:
+        """Return a UI-friendly portfolio view marked at the latest mid-price."""
+
         unrealized = compute_unrealized_pnl(
             position_btc=self.position_btc,
             avg_entry_price=self.avg_entry_price,
@@ -54,6 +62,8 @@ class PortfolioState:
         }
 
     def _increase_position(self, signed_qty: float, fill_price: float) -> None:
+        """Average into an existing position when the trade extends inventory."""
+
         total_qty = self.position_btc + signed_qty
         if abs(total_qty) < 1e-12:
             self.position_btc = 0.0
@@ -64,6 +74,8 @@ class PortfolioState:
         self.avg_entry_price = weighted_cost / total_qty
 
     def _reduce_or_flip_position(self, signed_qty: float, fill_price: float) -> None:
+        """Realize PnL on inventory reduction and reset cost basis on flips."""
+
         closing_qty = min(abs(self.position_btc), abs(signed_qty))
         if self.position_btc > 0:
             self.realized_pnl += (fill_price - self.avg_entry_price) * closing_qty
@@ -80,4 +92,3 @@ class PortfolioState:
             self.avg_entry_price = fill_price
             return
         self.position_btc = new_position
-

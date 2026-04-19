@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "crypto-trading-desk-intern"
+name = "crypto-trading-desk"
 version = "0.1.0"
-description = "Crypto algo trading internship exercise with live Coinbase data"
+description = "Crypto trading desk simulator with live Coinbase market data"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

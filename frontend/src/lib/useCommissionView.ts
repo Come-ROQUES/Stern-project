@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type CommissionView = "reported" | "economic";
 
-const STORAGE_KEY = "fractal.commission.view";
+const STORAGE_KEY = "stern.commission.view";
 const DEFAULT_VIEW: CommissionView = "reported";
 
 let initialized = false;

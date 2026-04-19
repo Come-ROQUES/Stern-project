@@ -3,7 +3,7 @@
  *
  * Uses:
  * - NavModel for navigation
- * - FractalModeProvider for mode context
+ * - DeskModeProvider for mode context
  * - SideNav for section-based navigation
  * - HeaderControls for run selector + research toggle
  * - Glass design system components
@@ -26,11 +26,11 @@ import {
     QUANT_TABS,
     TERMINAL_TABS,
     type AppMode,
-    type FractalMode,
+    type DeskMode,
 } from './lib/navModel';
 import {
-    FractalModeProvider,
-    useFractalMode,
+    DeskModeProvider,
+    useDeskMode,
     HeaderControls,
 } from './components/HeaderControls';
 import { SideNav, MobileNav } from './components/SideNav';
@@ -237,7 +237,7 @@ type BuildAssets = {
 
 type TabCacheByMode = Record<AppMode, TabCacheEntry[]>;
 
-const REACT_185_RECOVERY_KEY = "fractal.react185.recovery_once";
+const REACT_185_RECOVERY_KEY = "stern.react185.recovery_once";
 const TAB_CACHE_TTL_MS = 90_000;
 const TAB_CACHE_MAX_ENTRIES = 3;
 
@@ -399,7 +399,7 @@ function renderAppModeTab(
 
 function parseRouteFromHash(
     appMode: AppMode,
-    fractalMode: FractalMode,
+    deskMode: DeskMode,
     researchModeEnabled: boolean
 ): ResolvedHashRoute {
     const raw = (
@@ -437,7 +437,7 @@ function parseRouteFromHash(
     }
     return {
         appMode,
-        route: { kind: 'tab', tabId: getDefaultTab(appMode, fractalMode) },
+        route: { kind: 'tab', tabId: getDefaultTab(appMode, deskMode) },
     };
 }
 
@@ -691,7 +691,7 @@ function BacktestRunningBadge({ onNavigate }: { onNavigate: () => void }) {
 // =============================================================================
 
 function AppContent() {
-    const { mode, researchModeEnabled, setResearchModeEnabled, appMode, setAppMode } = useFractalMode();
+    const { mode, researchModeEnabled, setResearchModeEnabled, appMode, setAppMode } = useDeskMode();
     const quantScope = useQuantLabScope();
     const runId = useRunId();
     const { run: resolvedRun } = useRunContext();
@@ -1559,7 +1559,7 @@ function AppContent() {
 
 export function AppV2() {
     return (
-        <FractalModeProvider>
+        <DeskModeProvider>
             <DashboardTimeframeProvider>
                 <PortfolioEpochProvider>
                     <SelectionProvider>
@@ -1569,7 +1569,7 @@ export function AppV2() {
                     </SelectionProvider>
                 </PortfolioEpochProvider>
             </DashboardTimeframeProvider>
-        </FractalModeProvider>
+        </DeskModeProvider>
     );
 }
 

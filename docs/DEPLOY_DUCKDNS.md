@@ -146,8 +146,8 @@ https://<subdomain>.duckdns.org
 - rends le repo `public` uniquement quand tu es certain qu'il ne contient plus
   aucun element confidentiel
 - DuckDNS est parfait pour te differencier vite en entretien
-- si tu veux une couche encore plus propre, on pourra ensuite ajouter un petit
-  bandeau "internship project" et une page `About`
+- si tu veux une couche encore plus propre, tu peux ajouter une page `About`
+  avec l'architecture, les choix techniques et les limites du simulateur
 
 ## Troubleshooting
 

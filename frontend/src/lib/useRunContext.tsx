@@ -23,7 +23,7 @@ import { canonicalApi, type Run, type SignalStats, type ShockStats } from './can
 import { getBundleState, syncBundleDwRunId } from './useBundleRuns';
 
 // localStorage key for run persistence
-const STORAGE_KEY = 'fractal.selectedRunId';
+const STORAGE_KEY = 'stern.selectedRunId';
 
 export type DataScope = 'TODAY' | 'YESTERDAY' | 'DATE';
 

@@ -42,7 +42,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { getTabsBySection, SECTION_INFO, type NavTab, type NavSection } from '../lib/navModel';
-import { useFractalMode } from './HeaderControls';
+import { useDeskMode } from './HeaderControls';
 import { cn } from '../lib/utils';
 import { GlassBadge } from './ui/glass';
 
@@ -196,7 +196,7 @@ interface SideNavProps {
 }
 
 export function SideNav({ activeTab, onTabChange, className }: SideNavProps) {
-    const { mode, researchModeEnabled, appMode } = useFractalMode();
+    const { mode, researchModeEnabled, appMode } = useDeskMode();
     const [systemCollapsed, setSystemCollapsed] = React.useState(false);
 
     // Get visible tabs per section
@@ -299,7 +299,7 @@ interface MobileNavProps {
 }
 
 export function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
-    const { mode, researchModeEnabled, appMode } = useFractalMode();
+    const { mode, researchModeEnabled, appMode } = useDeskMode();
     const [moreOpen, setMoreOpen] = useState(false);
     const sheetRef = useRef<HTMLDivElement>(null);
 

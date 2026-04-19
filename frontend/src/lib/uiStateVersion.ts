@@ -1,6 +1,6 @@
-const UI_VERSION_KEY = 'fractal.uiVersion';
+const UI_VERSION_KEY = 'stern.uiVersion';
 
-const PREFIXES = ['fractal.', 'fractal_chart_'];
+const PREFIXES = ['stern.', 'stern_chart_'];
 
 function purgeUiKeys() {
   for (let i = localStorage.length - 1; i >= 0; i--) {

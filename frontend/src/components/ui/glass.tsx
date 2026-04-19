@@ -1,5 +1,5 @@
 /**
- * Liquid Glass Design System - FRACTAL Dashboard
+ * Liquid Glass Design System - Stern Dashboard
  * 
  * Visual direction:
  * - Dark theme, low-saturation, high-clarity
