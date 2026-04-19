@@ -1898,7 +1898,8 @@ type BucketSec = (typeof BUCKET_CHOICES)[number];
 function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<UTCTimestamp>[] {
   if (mids.length === 0) return [];
   const buckets = new Map<number, CandlestickData<UTCTimestamp>>();
-  const order: number[] = [];
+  let first: number | null = null;
+  let last: number | null = null;
   for (const point of mids) {
     const ms = Date.parse(point.ts);
     if (!Number.isFinite(ms)) continue;
@@ -1913,14 +1914,42 @@ function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<
         low: point.mid_price,
         close: point.mid_price,
       });
-      order.push(bucket);
+      if (first == null || bucket < first) first = bucket;
+      if (last == null || bucket > last) last = bucket;
     } else {
       if (point.mid_price > existing.high) existing.high = point.mid_price;
       if (point.mid_price < existing.low) existing.low = point.mid_price;
       existing.close = point.mid_price;
     }
   }
-  return order.map((b) => buckets.get(b)!);
+  if (first == null || last == null) return [];
+  // Forward-fill empty buckets so quiet-market gaps render as flat candles
+  // instead of visual holes. Backend samples mid at 10 Hz but only when the
+  // book updates, so seconds without order-book changes produce no ticks.
+  // Cap contiguous fill to 5 min worth of buckets — anything larger likely
+  // signals a feed disconnect and should stay visible as a break.
+  const out: CandlestickData<UTCTimestamp>[] = [];
+  const maxContiguousFill = Math.max(1, Math.ceil(300 / bucketSec));
+  let prevClose: number | null = null;
+  let gapRun = 0;
+  for (let t = first; t <= last; t += bucketSec) {
+    const real = buckets.get(t);
+    if (real) {
+      out.push(real);
+      prevClose = real.close;
+      gapRun = 0;
+    } else if (prevClose != null && gapRun < maxContiguousFill) {
+      out.push({
+        time: t as UTCTimestamp,
+        open: prevClose,
+        high: prevClose,
+        low: prevClose,
+        close: prevClose,
+      });
+      gapRun += 1;
+    }
+  }
+  return out;
 }
 
 const MIN_MARKER_SIZE = 0.005;
