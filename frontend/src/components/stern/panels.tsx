@@ -1924,6 +1924,7 @@ function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<
 }
 
 const MIN_MARKER_SIZE = 0.005;
+const MIN_BUCKET_AGG_SIZE = 0.02;
 const MAX_MARKERS = 20;
 
 function buildFillMarkers(
@@ -1933,7 +1934,8 @@ function buildFillMarkers(
   lastBucket: number | null,
 ): SeriesMarker<Time>[] {
   if (firstBucket == null || lastBucket == null) return [];
-  const out: SeriesMarker<Time>[] = [];
+  type Agg = { size: number; count: number };
+  const buckets = new Map<string, Agg>();
   for (const fill of fills) {
     if (Math.abs(fill.size) < MIN_MARKER_SIZE) continue;
     const ms = Date.parse(fill.ts);
@@ -1941,12 +1943,30 @@ function buildFillMarkers(
     const t = Math.floor(ms / 1000);
     const bucket = Math.floor(t / bucketSec) * bucketSec;
     if (bucket < firstBucket || bucket > lastBucket) continue;
+    const key = `${bucket}|${fill.side}`;
+    const prev = buckets.get(key);
+    if (prev) {
+      prev.size += Math.abs(fill.size);
+      prev.count += 1;
+    } else {
+      buckets.set(key, { size: Math.abs(fill.size), count: 1 });
+    }
+  }
+  const out: SeriesMarker<Time>[] = [];
+  for (const [key, agg] of buckets) {
+    if (agg.size < MIN_BUCKET_AGG_SIZE) continue;
+    const [bucketStr, side] = key.split("|");
+    const bucket = Number(bucketStr);
+    const isBuy = side === "buy";
+    const label = agg.count > 1
+      ? `${isBuy ? "B" : "S"} ${agg.size.toFixed(3)} ×${agg.count}`
+      : `${isBuy ? "B" : "S"} ${agg.size.toFixed(3)}`;
     out.push({
       time: bucket as UTCTimestamp,
-      position: fill.side === "buy" ? "belowBar" : "aboveBar",
-      color: fill.side === "buy" ? "#22c55e" : "#ef4444",
-      shape: fill.side === "buy" ? "arrowUp" : "arrowDown",
-      text: `${fill.side === "buy" ? "B" : "S"} ${fill.size.toFixed(3)}`,
+      position: isBuy ? "belowBar" : "aboveBar",
+      color: isBuy ? "#22c55e" : "#ef4444",
+      shape: isBuy ? "arrowUp" : "arrowDown",
+      text: label,
     });
   }
   out.sort((a, b) => (a.time as number) - (b.time as number));
