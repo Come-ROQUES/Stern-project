@@ -436,13 +436,15 @@ function EquityCurveHero({
           <span className="text-rose-300">{formatUsd(drawdownUsd, 2)}</span>
         </span>
       </div>
-      {hasData ? (
-        <div ref={containerRef} className="w-full h-[140px] lg:h-[160px]" />
-      ) : (
-        <div className="h-[140px] lg:h-[160px] flex items-center justify-center text-sm text-neutral-500">
-          Warming up equity samples…
-        </div>
-      )}
+      <div className="relative w-full h-[140px] lg:h-[160px]">
+        {/* Container must always mount so the chart effect (runs once) can find it. */}
+        <div ref={containerRef} className="w-full h-full" />
+        {!hasData && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500 pointer-events-none">
+            Warming up equity samples…
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
