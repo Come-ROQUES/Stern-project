@@ -26,6 +26,7 @@ EVENT_LOOP_YIELD_EVERY = 1
 SNAPSHOT_YIELD_EVERY = 500
 READINESS_MIN_POINTS = 1
 FAST_ANALYTICS_INTERVAL_S = 0.25
+MID_SAMPLE_INTERVAL_S = 0.1
 STATE_PUBLISH_INTERVAL_S = 0.10
 
 
@@ -38,6 +39,7 @@ class MarketDataService:
         self._state_event = asyncio.Event()
         self._last_analytics_at = 0.0
         self._last_publish_at = 0.0
+        self._last_mid_sample_at = 0.0
         self._last_vol_bps = 0.0
         self.order_book = OrderBook()
         self.trade_tape: deque[PublicTrade] = deque(maxlen=settings.trade_history_limit)
@@ -45,7 +47,7 @@ class MarketDataService:
             maxlen=settings.trade_history_limit
         )
         self.spread_tracker = SpreadTracker()
-        self.mid_history: deque[dict[str, float | str]] = deque(maxlen=240)
+        self.mid_history: deque[dict[str, float | str]] = deque(maxlen=1800)
         self.portfolio_history: deque[dict[str, float | str]] = deque(maxlen=240)
         self.quote_history: deque[dict[str, float | str | bool]] = deque(maxlen=240)
         self.portfolio = PortfolioState.bootstrap(
@@ -57,6 +59,8 @@ class MarketDataService:
                 base_quote_spread_bps=settings.base_quote_spread_bps,
                 order_size_btc=settings.order_size_btc,
                 position_skew_bps_per_btc=settings.position_skew_bps_per_btc,
+                vol_adaptive_gain=settings.vol_adaptive_gain,
+                vol_adaptive_cap_bps=settings.vol_adaptive_cap_bps,
             ),
             portfolio=self.portfolio,
             risk_limits=RiskLimits(
@@ -125,11 +129,12 @@ class MarketDataService:
             mid_price=mid,
             realized_vol_bps=self._last_vol_bps,
         )
+        self._maybe_record_mid(mid)
         self._maybe_refresh_analytics(mid=mid, quote_active=quote is not None)
         self._publish_state()
 
     def _realized_vol_bps(self) -> float:
-        mid_values = [float(point["mid_price"]) for point in list(self.mid_history)[-60:]]
+        mid_values = [float(point["mid_price"]) for point in list(self.mid_history)[-150:]]
         if len(mid_values) < 2:
             return 0.0
         returns = _returns_bps(mid_values)
@@ -191,6 +196,21 @@ class MarketDataService:
             realized_vol_bps=self._last_vol_bps,
         )
         self._publish_state(force=True)
+
+    def _maybe_record_mid(self, mid: float) -> None:
+        # Mid sampling is decoupled from the heavier analytics pass so the
+        # price chart has dense points (10 Hz) for a smooth candle render,
+        # while vol/momentum/depth analytics stay throttled.
+        now = monotonic()
+        if now - self._last_mid_sample_at < MID_SAMPLE_INTERVAL_S:
+            return
+        self._last_mid_sample_at = now
+        self.mid_history.append(
+            {
+                "ts": datetime.now(tz=UTC).isoformat(),
+                "mid_price": mid,
+            }
+        )
 
     def _maybe_refresh_analytics(self, mid: float, quote_active: bool) -> None:
         now = monotonic()
@@ -298,12 +318,6 @@ class MarketDataService:
         now = datetime.now(tz=UTC)
         portfolio = self.portfolio.snapshot(mark_price=mid)
         total_pnl = float(portfolio["realized_pnl"]) + float(portfolio["unrealized_pnl"])
-        self.mid_history.append(
-            {
-                "ts": now.isoformat(),
-                "mid_price": mid,
-            }
-        )
         self.portfolio_history.append(
             {
                 "ts": now.isoformat(),

@@ -40,6 +40,7 @@ def test_state_snapshot_marks_quant_and_backtest_ready_after_first_point() -> No
         asks=[("100010", "1.0")],
     )
     service.market_maker.update_quote(mid_price=100005.0, realized_vol_bps=0.0)
+    service._maybe_record_mid(100005.0)
     service._record_live_snapshots(mid=100005.0, quote_active=True)
 
     snapshot = asyncio.run(service.state_snapshot())
@@ -57,6 +58,7 @@ def test_fast_path_keeps_quote_fresh_while_analytics_are_throttled() -> None:
     )
     service._last_vol_bps = 7.0
     service._last_analytics_at = monotonic()
+    service._last_mid_sample_at = monotonic()
 
     asyncio.run(service._handle_message({"channel": "noop"}))
 

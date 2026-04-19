@@ -1851,7 +1851,7 @@ export function ProTerminalPanel() {
 // time buckets so no backend change is required.
 // ============================================================================
 
-const BUCKET_CHOICES = [1, 2, 5, 15] as const;
+const BUCKET_CHOICES = [1, 2, 5, 15, 30] as const;
 type BucketSec = (typeof BUCKET_CHOICES)[number];
 
 function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<UTCTimestamp>[] {
@@ -2065,7 +2065,7 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
 
 export function PriceChartPanel() {
   const { data: state } = useSternState();
-  const [bucketSec, setBucketSec] = useState<BucketSec>(2);
+  const [bucketSec, setBucketSec] = useState<BucketSec>(1);
   const mids = state?.mid_history ?? [];
   const fills = state?.fills ?? [];
 
