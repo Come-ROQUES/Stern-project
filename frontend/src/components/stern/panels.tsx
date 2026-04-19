@@ -267,9 +267,37 @@ function EquityCurveHero({
   const seriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const startLineRef = useRef<IPriceLine | null>(null);
   const peakLineRef = useRef<IPriceLine | null>(null);
+  const chartEquityCurve = useMemo(() => {
+    const normalized: number[] = [];
+    let prev: number | null = null;
+    for (const point of equityCurve) {
+      const value = Number(point);
+      if (Number.isFinite(value)) {
+        normalized.push(value);
+        prev = value;
+      } else if (prev != null) {
+        // Preserve continuity if a transient bad sample sneaks into the feed.
+        normalized.push(prev);
+      }
+    }
+
+    const latest = normalized.length > 0 ? normalized[normalized.length - 1] : null;
+    if (Number.isFinite(currentEquity)) {
+      if (latest == null) {
+        normalized.push(currentEquity);
+      } else if (Math.abs(latest - currentEquity) >= 0.005) {
+        normalized.push(currentEquity);
+      }
+    }
+
+    if (normalized.length === 1) {
+      normalized.unshift(normalized[0]);
+    }
+    return normalized;
+  }, [equityCurve, currentEquity]);
 
   const startingEquity =
-    equityCurve.length > 0 ? equityCurve[0] : currentEquity;
+    chartEquityCurve.length > 0 ? chartEquityCurve[0] : currentEquity;
   const bullish = currentEquity >= startingEquity;
 
   useEffect(() => {
@@ -348,7 +376,7 @@ function EquityCurveHero({
     const series = seriesRef.current;
     const chart = chartRef.current;
     if (!series || !chart) return;
-    const data: AreaData<UTCTimestamp>[] = equityCurve.map((v, i) => ({
+    const data: AreaData<UTCTimestamp>[] = chartEquityCurve.map((v, i) => ({
       time: (i + 1) as UTCTimestamp,
       value: v,
     }));
@@ -363,7 +391,7 @@ function EquityCurveHero({
         : "rgba(239, 68, 68, 0.02)",
     });
     if (data.length > 1) chart.timeScale().fitContent();
-  }, [equityCurve, bullish]);
+  }, [chartEquityCurve, bullish]);
 
   useEffect(() => {
     const series = seriesRef.current;
@@ -409,7 +437,7 @@ function EquityCurveHero({
   }, [startingEquity, peakEquity]);
 
   const change = currentEquity - startingEquity;
-  const hasData = equityCurve.length >= 2;
+  const hasData = chartEquityCurve.length >= 2;
 
   return (
     <Panel
