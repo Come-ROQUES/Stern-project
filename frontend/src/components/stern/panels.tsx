@@ -2736,7 +2736,7 @@ export function PortfolioPanel() {
         />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0">
-        <div className="lg:col-span-7 flex flex-col gap-2 min-h-0">
+        <div className="lg:col-span-8 flex flex-col gap-2 min-h-0">
           <div className="flex-1 min-h-0 flex">
             <EquityCurveHero
               equityCurve={bt?.equity_curve ?? []}
@@ -2758,7 +2758,7 @@ export function PortfolioPanel() {
             />
           </Panel>
         </div>
-        <div className="lg:col-span-5 flex flex-col gap-2 min-h-0">
+        <div className="lg:col-span-4 flex flex-col gap-2 min-h-0">
           <Panel
             title="Session flow"
             subtitle="Buy / sell split, avg fill size, VWAP"
