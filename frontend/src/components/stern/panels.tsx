@@ -436,7 +436,7 @@ function EquityCurveHero({
           <span className="text-rose-300">{formatUsd(drawdownUsd, 2)}</span>
         </span>
       </div>
-      <div className="relative w-full h-[140px] lg:h-[160px]">
+      <div className="relative w-full flex-1 min-h-[140px]">
         {/* Container must always mount so the chart effect (runs once) can find it. */}
         <div ref={containerRef} className="w-full h-full" />
         {!hasData && (
@@ -2717,11 +2717,7 @@ export function PortfolioPanel() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-1 min-h-0">
         <div className="lg:col-span-7 flex flex-col gap-2 min-h-0">
-          <Panel
-            title="Equity curve"
-            subtitle="Paper session equity over time"
-            className="flex-1 min-h-0"
-          >
+          <div className="flex-1 min-h-0 flex">
             <EquityCurveHero
               equityCurve={bt?.equity_curve ?? []}
               peakEquity={bt?.peak_equity_usd ?? currentEquity}
@@ -2729,11 +2725,11 @@ export function PortfolioPanel() {
               returnPct={returnPct}
               drawdownUsd={portfolio?.drawdown ?? 0}
             />
-          </Panel>
+          </div>
           <Panel
             title="Position"
             subtitle="Inventory, avg entry and mark-to-market drift"
-            className="flex-shrink-0 h-[128px] overflow-hidden"
+            className="flex-shrink-0 h-[148px] overflow-hidden"
             bodyClassName="overflow-hidden"
           >
             <PositionCard
@@ -2746,7 +2742,7 @@ export function PortfolioPanel() {
           <Panel
             title="Session flow"
             subtitle="Buy / sell split, avg fill size, VWAP"
-            className="flex-shrink-0 h-[128px] overflow-hidden"
+            className="flex-shrink-0 h-[148px] overflow-hidden"
             bodyClassName="overflow-hidden"
           >
             <FillFlowStats fills={state?.fills ?? []} />
