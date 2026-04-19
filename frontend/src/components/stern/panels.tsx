@@ -763,7 +763,7 @@ export function OverviewPanel() {
 // depth curve so clicking a rung pins that price across panels.
 // ============================================================================
 
-const LADDER_DEPTH = 10;
+const LADDER_DEPTH = 5;
 const IMBALANCE_TOP_N = 5;
 const DEPTH_CURVE_LEVELS = 20;
 const FLOW_WINDOW_MS = 60_000;
