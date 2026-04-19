@@ -445,6 +445,7 @@ function EquityCurveHero({
     <Panel
       title="Equity Curve"
       subtitle="Paper session · cash + mark-to-market portfolio value"
+      className="w-full"
       bodyClassName="flex flex-col"
     >
       <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 mb-2 text-xs font-mono flex-shrink-0">
