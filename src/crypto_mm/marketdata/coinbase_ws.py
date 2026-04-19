@@ -17,6 +17,7 @@ from crypto_mm.analytics.spread import SpreadTracker, compute_depth_spreads
 from crypto_mm.common.settings import Settings
 from crypto_mm.marketdata.models import BookLevel, PublicTrade
 from crypto_mm.marketdata.orderbook import OrderBook
+from crypto_mm.notify import TelegramNotifier
 from crypto_mm.portfolio.ledger import PortfolioState
 from crypto_mm.risk.limits import RiskLimits
 from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
@@ -70,6 +71,11 @@ class MarketDataService:
                 max_loss=settings.max_loss,
             ),
         )
+        self.notifier = TelegramNotifier(
+            bot_token=settings.telegram_bot_token,
+            chat_id=settings.telegram_chat_id,
+        )
+        self._last_risk_status = self.market_maker.risk_status
 
     async def run_forever(self) -> None:
         """Reconnect forever so the local dashboard survives feed interruptions."""
@@ -240,6 +246,27 @@ class MarketDataService:
         spreads = compute_depth_spreads(self.order_book)
         self.spread_tracker.record(spreads)
         self._record_live_snapshots(mid=mid, quote_active=quote is not None and quote_active)
+        self._maybe_notify_risk_transition(mid=mid)
+
+    def _maybe_notify_risk_transition(self, mid: float) -> None:
+        # Only fire on state change so a breached book does not spam Telegram.
+        current = self.market_maker.risk_status
+        if current == self._last_risk_status:
+            return
+        previous = self._last_risk_status
+        self._last_risk_status = current
+        if not self.notifier.enabled:
+            return
+        portfolio = self.portfolio.snapshot(mark_price=mid)
+        total_pnl = float(portfolio["realized_pnl"]) + float(portfolio["unrealized_pnl"])
+        text = (
+            f"*Risk status*: `{previous}` → `{current}`\n"
+            f"Mid: `{mid:,.2f}` USD\n"
+            f"Position: `{float(portfolio['position_btc']):+.4f}` BTC\n"
+            f"Exposure: `{float(portfolio['exposure_usd']):,.0f}` USD\n"
+            f"PnL: `{total_pnl:+,.2f}` USD"
+        )
+        self.notifier.fire_and_forget(text)
 
     def _publish_state(self, force: bool = False) -> None:
         """Signal state updates to polling and streaming consumers."""

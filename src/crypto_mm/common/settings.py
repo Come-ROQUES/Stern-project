@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     vol_adaptive_gain: float = 0.15
     vol_adaptive_cap_bps: float = 3.0
     trade_history_limit: int = 200
+    # Optional Telegram alerts. Disabled when either field is empty.
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
 
     @field_validator("debug", mode="before")
     @classmethod
