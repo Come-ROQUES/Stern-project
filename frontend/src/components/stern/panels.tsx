@@ -7,6 +7,7 @@ import {
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
+  type LineData,
   type SeriesMarker,
   type Time,
   type UTCTimestamp,
@@ -1897,13 +1898,22 @@ type BucketSec = (typeof BUCKET_CHOICES)[number];
 
 function aggregateCandles(mids: MidPoint[], bucketSec: number): CandlestickData<UTCTimestamp>[] {
   if (mids.length === 0) return [];
+  const sortedMids = mids
+    .map((point) => ({
+      ...point,
+      epochMs: Date.parse(point.ts),
+    }))
+    .filter(
+      (point): point is MidPoint & { epochMs: number } =>
+        Number.isFinite(point.epochMs) && Number.isFinite(point.mid_price),
+    )
+    .sort((a, b) => a.epochMs - b.epochMs);
+  if (sortedMids.length === 0) return [];
   const buckets = new Map<number, CandlestickData<UTCTimestamp>>();
   let first: number | null = null;
   let last: number | null = null;
-  for (const point of mids) {
-    const ms = Date.parse(point.ts);
-    if (!Number.isFinite(ms)) continue;
-    const t = Math.floor(ms / 1000);
+  for (const point of sortedMids) {
+    const t = Math.floor(point.epochMs / 1000);
     const bucket = Math.floor(t / bucketSec) * bucketSec;
     const existing = buckets.get(bucket);
     if (!existing) {
@@ -2004,15 +2014,25 @@ function buildFillMarkers(
 
 type CandleChartProps = {
   candles: CandlestickData<UTCTimestamp>[];
+  continuityLine: LineData<UTCTimestamp>[];
+  bucketSec: BucketSec;
   bidPrice: number | null;
   askPrice: number | null;
   markers: SeriesMarker<Time>[];
 };
 
-function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps) {
+function CandleChart({
+  candles,
+  continuityLine,
+  bucketSec,
+  bidPrice,
+  askPrice,
+  markers,
+}: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const continuitySeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bidLineRef = useRef<IPriceLine | null>(null);
   const askLineRef = useRef<IPriceLine | null>(null);
   const prevLastTimeRef = useRef<number | null>(null);
@@ -2039,7 +2059,7 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
         secondsVisible: true,
         borderColor: "rgba(82, 82, 91, 0.4)",
         rightOffset: 4,
-        barSpacing: 8,
+        barSpacing: bucketSec <= 1 ? 7 : bucketSec <= 5 ? 9 : 12,
       },
       rightPriceScale: {
         borderColor: "rgba(82, 82, 91, 0.4)",
@@ -2061,11 +2081,20 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
       wickDownColor: "rgba(239, 68, 68, 0.7)",
       priceFormat: { type: "price", precision: 2, minMove: 0.01 },
     });
+    const continuitySeries = chart.addLineSeries({
+      color: bucketSec <= 1 ? "rgba(34, 211, 238, 0.72)" : "rgba(34, 211, 238, 0.42)",
+      lineWidth: bucketSec <= 2 ? 2 : 1,
+      lineStyle: LineStyle.Solid,
+      crosshairMarkerVisible: false,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
     series.priceScale().applyOptions({
       scaleMargins: { top: 0.08, bottom: 0.12 },
     });
     chartRef.current = chart;
     seriesRef.current = series;
+    continuitySeriesRef.current = continuitySeries;
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -2082,17 +2111,29 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      continuitySeriesRef.current = null;
       bidLineRef.current = null;
       askLineRef.current = null;
       prevLastTimeRef.current = null;
     };
-  }, []);
+  }, [bucketSec]);
 
   useEffect(() => {
     const series = seriesRef.current;
+    const continuitySeries = continuitySeriesRef.current;
     const chart = chartRef.current;
-    if (!series || !chart) return;
+    if (!series || !continuitySeries || !chart) return;
+    chart.applyOptions({
+      timeScale: {
+        barSpacing: bucketSec <= 1 ? 7 : bucketSec <= 5 ? 9 : 12,
+      },
+    });
+    continuitySeries.applyOptions({
+      color: bucketSec <= 1 ? "rgba(34, 211, 238, 0.72)" : "rgba(34, 211, 238, 0.42)",
+      lineWidth: bucketSec <= 2 ? 2 : 1,
+    });
     series.setData(candles);
+    continuitySeries.setData(continuityLine);
     const lastTime =
       candles.length > 0 ? (candles[candles.length - 1].time as number) : null;
     const prevLast = prevLastTimeRef.current;
@@ -2109,7 +2150,7 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
         chart.timeScale().scrollToRealTime();
       }
     }
-  }, [candles]);
+  }, [candles, continuityLine, bucketSec]);
 
   useEffect(() => {
     const series = seriesRef.current;
@@ -2160,6 +2201,14 @@ export function PriceChartPanel() {
   const fills = state?.fills ?? [];
 
   const candles = useMemo(() => aggregateCandles(mids, bucketSec), [mids, bucketSec]);
+  const continuityLine = useMemo<LineData<UTCTimestamp>[]>(
+    () =>
+      candles.map((candle) => ({
+        time: candle.time,
+        value: candle.close,
+      })),
+    [candles],
+  );
   const markers = useMemo(() => {
     if (candles.length === 0) return [];
     const firstBucket = candles[0].time as number;
@@ -2265,6 +2314,8 @@ export function PriceChartPanel() {
           ) : (
             <CandleChart
               candles={candles}
+              continuityLine={continuityLine}
+              bucketSec={bucketSec}
               bidPrice={state?.quote?.bid_price ?? null}
               askPrice={state?.quote?.ask_price ?? null}
               markers={markers}
