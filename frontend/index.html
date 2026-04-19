@@ -6,6 +6,23 @@
     <base href="/" />
     <title>STERN Crypto Terminal</title>
     <link rel="stylesheet" href="src/index.css" />
+    <style>
+      html, body { background: #060910; }
+      body { margin: 0; color: #e2e8f0; }
+      #root:empty::before {
+        content: "STERN";
+        position: fixed; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font: 600 14px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+        letter-spacing: 0.35em;
+        color: rgba(44, 227, 255, 0.78);
+        animation: stern-boot-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes stern-boot-pulse {
+        0%, 100% { opacity: 0.35; }
+        50% { opacity: 1; }
+      }
+    </style>
   </head>
   <body class="bg-bg text-white">
     <div id="root"></div>

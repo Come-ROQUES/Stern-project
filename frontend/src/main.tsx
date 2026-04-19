@@ -30,7 +30,13 @@ const BUILD_STAMP = (import.meta as any).env?.VITE_BUILD_STAMP ?? "";
 ensureUiStateVersion(BUILD_STAMP);
 
 async function bootstrap() {
-  const canBoot = await ensureFreshIndexAsset();
+  // Parallelize the freshness check and the AppV2 chunk download so first paint
+  // isn't gated on a serial network waterfall. On stale-index reload the chunk
+  // work is wasted, but that's rare and bounded to deploy transitions.
+  const freshPromise = ensureFreshIndexAsset();
+  const appPromise = import("./AppV2");
+
+  const canBoot = await freshPromise;
   if (!canBoot) {
     return;
   }
@@ -38,7 +44,7 @@ async function bootstrap() {
   installLazyChunkRecovery();
   const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 
-  const { AppV2 } = await import("./AppV2");
+  const { AppV2 } = await appPromise;
   root.render(
     <React.StrictMode>
       <ErrorBoundary>
