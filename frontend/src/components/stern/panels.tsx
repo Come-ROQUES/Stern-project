@@ -3340,94 +3340,512 @@ export function MicrostructurePanel() {
 // Risk (ib-account tab) and System (vm-status tab)
 // ============================================================================
 
+type RiskTone = "good" | "warn" | "bad" | "neutral";
+
+function toneClasses(tone: RiskTone): { text: string; stroke: string; bg: string; border: string; ring: string } {
+  switch (tone) {
+    case "bad":
+      return {
+        text: "text-rose-300",
+        stroke: "#f43f5e",
+        bg: "bg-rose-500/10",
+        border: "border-rose-400/30",
+        ring: "ring-rose-400/30",
+      };
+    case "warn":
+      return {
+        text: "text-amber-300",
+        stroke: "#f59e0b",
+        bg: "bg-amber-500/10",
+        border: "border-amber-400/30",
+        ring: "ring-amber-400/30",
+      };
+    case "good":
+      return {
+        text: "text-emerald-300",
+        stroke: "#22c55e",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-400/30",
+        ring: "ring-emerald-400/30",
+      };
+    default:
+      return {
+        text: "text-neutral-200",
+        stroke: "#64748b",
+        bg: "bg-white/[0.02]",
+        border: "border-white/[0.05]",
+        ring: "ring-white/5",
+      };
+  }
+}
+
+function consumptionTone(pct: number): RiskTone {
+  if (pct > 0.8) return "bad";
+  if (pct > 0.5) return "warn";
+  return "good";
+}
+
+function RadialGauge({
+  pct,
+  tone,
+  centerValue,
+  centerSub,
+}: {
+  pct: number;
+  tone: RiskTone;
+  centerValue: string;
+  centerSub: string;
+}) {
+  const clamped = Math.min(1, Math.max(0, pct));
+  const cx = 100;
+  const cy = 100;
+  const r = 74;
+  const endX = cx - r * Math.cos(clamped * Math.PI);
+  const endY = cy - r * Math.sin(clamped * Math.PI);
+  const bgPath = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+  const valPath =
+    clamped <= 1e-4
+      ? ""
+      : `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${endX.toFixed(2)} ${endY.toFixed(2)}`;
+  const { stroke, text } = toneClasses(tone);
+
+  return (
+    <div className="h-full w-full flex flex-col items-center justify-center min-h-0 min-w-0">
+      <svg
+        viewBox="0 0 200 118"
+        preserveAspectRatio="xMidYMid meet"
+        className="w-full max-w-[220px]"
+        style={{ maxHeight: "100%" }}
+      >
+        <path
+          d={bgPath}
+          fill="none"
+          stroke="rgba(148, 163, 184, 0.14)"
+          strokeWidth={14}
+          strokeLinecap="round"
+        />
+        {valPath && (
+          <path
+            d={valPath}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={14}
+            strokeLinecap="round"
+          />
+        )}
+        <text
+          x={cx}
+          y={cy - 14}
+          textAnchor="middle"
+          fontSize="22"
+          fontFamily="ui-monospace, monospace"
+          fontWeight="600"
+          className={text}
+          fill="currentColor"
+        >
+          {centerValue}
+        </text>
+        <text
+          x={cx}
+          y={cy + 4}
+          textAnchor="middle"
+          fontSize="9"
+          fontFamily="ui-monospace, monospace"
+          fill="#71717a"
+          style={{ letterSpacing: "0.14em" }}
+        >
+          {centerSub}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function LimitGaugeCard({
+  title,
+  pct,
+  currentLabel,
+  currentValue,
+  capLabel,
+  capValue,
+  headroomLabel,
+}: {
+  title: string;
+  pct: number;
+  currentLabel: string;
+  currentValue: string;
+  capLabel: string;
+  capValue: string;
+  headroomLabel: string;
+}) {
+  const tone = consumptionTone(pct);
+  const { text } = toneClasses(tone);
+  const pctStr = `${(pct * 100).toFixed(pct >= 0.995 ? 0 : 1)}%`;
+  return (
+    <div className="h-full flex flex-col min-h-0">
+      <div className="flex items-baseline justify-between gap-2 flex-shrink-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500">
+          {title}
+        </span>
+        <span className={`text-[10px] font-mono tabular-nums ${text}`}>
+          {headroomLabel}
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 flex items-center justify-center">
+        <RadialGauge pct={pct} tone={tone} centerValue={pctStr} centerSub="CONSUMED" />
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-[11px] font-mono flex-shrink-0 border-t border-white/[0.05] pt-1.5">
+        <div className="flex flex-col min-w-0">
+          <span className="text-[9px] uppercase tracking-wider text-neutral-500">
+            {currentLabel}
+          </span>
+          <span className="tabular-nums text-neutral-100 truncate">
+            {currentValue}
+          </span>
+        </div>
+        <div className="flex flex-col min-w-0 text-right">
+          <span className="text-[9px] uppercase tracking-wider text-neutral-500">
+            {capLabel}
+          </span>
+          <span className="tabular-nums text-neutral-400 truncate">
+            {capValue}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RiskStatusBanner({
+  status,
+  quoteActive,
+  notionalPct,
+  lossPct,
+}: {
+  status: string;
+  quoteActive: boolean;
+  notionalPct: number;
+  lossPct: number;
+}) {
+  const worstPct = Math.max(notionalPct, lossPct);
+  const tone: RiskTone =
+    status !== "ok"
+      ? "bad"
+      : !quoteActive
+        ? "warn"
+        : worstPct > 0.8
+          ? "bad"
+          : worstPct > 0.5
+            ? "warn"
+            : "good";
+  const { text, bg, border } = toneClasses(tone);
+  const headline =
+    status !== "ok"
+      ? "Risk tripped"
+      : !quoteActive
+        ? "Quotes paused"
+        : tone === "bad"
+          ? "Limits under pressure"
+          : tone === "warn"
+            ? "Approaching caps"
+            : "All limits nominal";
+  const detail =
+    status !== "ok"
+      ? `Risk status: ${status}`
+      : !quoteActive
+        ? "Strategy is not currently quoting"
+        : `Notional ${(notionalPct * 100).toFixed(1)}% · Loss ${(lossPct * 100).toFixed(1)}%`;
+
+  return (
+    <div
+      className={`glass-panel flex items-center gap-3 px-3 py-2 border ${border} ${bg} flex-shrink-0`}
+    >
+      <span className="relative flex h-2.5 w-2.5 flex-shrink-0" aria-hidden>
+        <span
+          className={`absolute inset-0 rounded-full animate-ping ${
+            tone === "good"
+              ? "bg-emerald-400/60"
+              : tone === "warn"
+                ? "bg-amber-400/60"
+                : tone === "bad"
+                  ? "bg-rose-400/60"
+                  : "bg-neutral-400/40"
+          }`}
+        />
+        <span
+          className={`relative rounded-full h-2.5 w-2.5 ${
+            tone === "good"
+              ? "bg-emerald-400"
+              : tone === "warn"
+                ? "bg-amber-400"
+                : tone === "bad"
+                  ? "bg-rose-400"
+                  : "bg-neutral-400"
+          }`}
+        />
+      </span>
+      <div className="flex flex-col min-w-0">
+        <span className={`text-sm font-semibold tracking-tight ${text} truncate`}>
+          {headline}
+        </span>
+        <span className="text-[11px] font-mono text-neutral-400 truncate">
+          {detail}
+        </span>
+      </div>
+      <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-sm border text-[10px] font-mono uppercase tracking-wider ${
+            status === "ok"
+              ? "text-emerald-300 border-emerald-400/30 bg-emerald-500/5"
+              : "text-rose-300 border-rose-400/30 bg-rose-500/5"
+          }`}
+        >
+          {status}
+        </span>
+        <span
+          className={`inline-flex items-center px-2 py-0.5 rounded-sm border text-[10px] font-mono uppercase tracking-wider ${
+            quoteActive
+              ? "text-cyan-300 border-cyan-400/30 bg-cyan-500/5"
+              : "text-neutral-400 border-white/10 bg-white/[0.02]"
+          }`}
+        >
+          {quoteActive ? "quoting" : "paused"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function QuoteConfigCard({
+  strategy,
+}: {
+  strategy: SternState["strategy"] | undefined;
+}) {
+  const cfg = strategy?.config;
+  const base = cfg?.base_quote_spread_bps ?? 0;
+  const effective = strategy?.effective_spread_bps ?? 0;
+  const widenDelta = effective - base;
+  const widenTone: RiskTone =
+    widenDelta > 4 ? "warn" : widenDelta > 10 ? "bad" : "good";
+  const { text: widenText } = toneClasses(widenTone);
+
+  const rows: Array<{
+    label: string;
+    value: string;
+    accentClass?: string;
+  }> = [
+    {
+      label: "Base spread",
+      value: formatBps(base),
+    },
+    {
+      label: "Effective",
+      value: formatBps(effective),
+      accentClass: widenText,
+    },
+    {
+      label: "Skew",
+      value: formatBps(strategy?.skew_bps ?? 0),
+    },
+    {
+      label: "Vol input",
+      value: formatBps(strategy?.vol_input_bps ?? 0),
+    },
+    {
+      label: "Order size",
+      value: formatBtc(cfg?.order_size_btc ?? 0, 4),
+    },
+    {
+      label: "Skew/BTC",
+      value: formatBps(cfg?.position_skew_bps_per_btc ?? 0),
+    },
+  ];
+
+  return (
+    <div className="h-full grid grid-cols-2 gap-x-4 gap-y-1.5 content-center min-h-0">
+      {rows.map((r) => (
+        <div
+          key={r.label}
+          className="flex items-baseline justify-between gap-2 min-w-0"
+        >
+          <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+            {r.label}
+          </span>
+          <span
+            className={`text-[11px] font-mono tabular-nums truncate ${
+              r.accentClass ?? "text-neutral-100"
+            }`}
+          >
+            {r.value}
+          </span>
+        </div>
+      ))}
+      {Math.abs(widenDelta) > 1e-6 && (
+        <div className="col-span-2 mt-1 pt-1.5 border-t border-white/[0.05] flex items-baseline justify-between gap-2 text-[10px] font-mono">
+          <span className="text-neutral-500 uppercase tracking-wider">
+            Spread widen
+          </span>
+          <span className={`tabular-nums ${widenText}`}>
+            {widenDelta > 0 ? "+" : ""}
+            {widenDelta.toFixed(2)} bps vs base
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InventoryCard({
+  strategy,
+  portfolio,
+  mid,
+}: {
+  strategy: SternState["strategy"] | undefined;
+  portfolio: PortfolioSnapshot | undefined;
+  mid: number | null;
+}) {
+  const cfg = strategy?.config;
+  const pos = portfolio?.position_btc ?? 0;
+  const orderSize = cfg?.order_size_btc ?? 0;
+  const inventoryUnits = orderSize > 1e-9 ? Math.abs(pos) / orderSize : 0;
+  const unitTone: RiskTone =
+    inventoryUnits > 10 ? "bad" : inventoryUnits > 5 ? "warn" : "good";
+  const { text: unitText } = toneClasses(unitTone);
+
+  const implicitSkew =
+    (cfg?.position_skew_bps_per_btc ?? 0) * pos;
+  const skewTone: RiskTone =
+    Math.abs(implicitSkew) > 10 ? "warn" : "good";
+  const { text: skewText } = toneClasses(skewTone);
+
+  const side: "long" | "short" | "flat" =
+    pos > 1e-8 ? "long" : pos < -1e-8 ? "short" : "flat";
+  const sideColor =
+    side === "long"
+      ? "text-emerald-300"
+      : side === "short"
+        ? "text-rose-300"
+        : "text-neutral-400";
+
+  return (
+    <div className="h-full grid grid-cols-2 gap-x-4 gap-y-1.5 content-center min-h-0">
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Side
+        </span>
+        <span className={`text-[11px] font-mono tracking-wider uppercase ${sideColor}`}>
+          {side}
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Position
+        </span>
+        <span className="text-[11px] font-mono tabular-nums text-neutral-100 truncate">
+          {formatBtc(pos, 4)}
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Units
+        </span>
+        <span className={`text-[11px] font-mono tabular-nums truncate ${unitText}`}>
+          {inventoryUnits.toFixed(2)}×
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Avg entry
+        </span>
+        <span className="text-[11px] font-mono tabular-nums text-neutral-100 truncate">
+          {formatUsd(portfolio?.avg_entry_price, 2)}
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Mid
+        </span>
+        <span className="text-[11px] font-mono tabular-nums text-neutral-100 truncate">
+          {formatUsd(mid, 2)}
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+          Implied skew
+        </span>
+        <span className={`text-[11px] font-mono tabular-nums truncate ${skewText}`}>
+          {implicitSkew >= 0 ? "+" : ""}
+          {implicitSkew.toFixed(1)} bps
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function RiskPanel() {
   const { data: state } = useSternState();
   const cfg = state?.strategy.config;
   const portfolio = state?.portfolio;
-  const riskOk = state?.risk_status === "ok";
   const notionalPct = cfg?.max_notional_exposure
     ? Math.min(1, (portfolio?.exposure_usd ?? 0) / cfg.max_notional_exposure)
     : 0;
   const lossPct = cfg?.max_loss
     ? Math.min(1, (portfolio?.drawdown ?? 0) / cfg.max_loss)
     : 0;
-
-  const items: Array<{
-    label: string;
-    value: string;
-    accent?: "positive" | "negative" | "neutral";
-    pct?: number;
-  }> = [
-    {
-      label: "Status",
-      value: state?.risk_status ?? "—",
-      accent: riskOk ? "positive" : "negative",
-    },
-    { label: "Max notional", value: formatUsd(cfg?.max_notional_exposure, 0) },
-    { label: "Max loss", value: formatUsd(cfg?.max_loss, 0) },
-    { label: "Base spread", value: formatBps(cfg?.base_quote_spread_bps) },
-    { label: "Order size", value: formatBtc(cfg?.order_size_btc, 4) },
-    { label: "Skew/BTC", value: formatBps(cfg?.position_skew_bps_per_btc) },
-    {
-      label: "Drawdown",
-      value: formatUsd(portfolio?.drawdown, 2),
-      accent: "negative",
-      pct: lossPct,
-    },
-    {
-      label: "Exposure",
-      value: formatUsd(portfolio?.exposure_usd, 2),
-      pct: notionalPct,
-    },
-  ];
+  const notionalHeadroom = Math.max(
+    0,
+    (cfg?.max_notional_exposure ?? 0) - (portfolio?.exposure_usd ?? 0),
+  );
+  const lossHeadroom = Math.max(
+    0,
+    (cfg?.max_loss ?? 0) - (portfolio?.drawdown ?? 0),
+  );
 
   return (
     <TabShell
       title="Risk"
       subtitle="Hard limits guarding the MM session"
     >
-      <Panel
-        title="Limits"
-        subtitle="Notional / drawdown consumption vs configured caps"
-      >
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full content-start">
-          {items.map((it) => (
-            <div
-              key={it.label}
-              className="rounded-md border border-white/[0.05] bg-white/[0.015] p-2.5 flex flex-col gap-1.5"
-            >
-              <div className="text-[10px] uppercase tracking-wider text-neutral-500">
-                {it.label}
-              </div>
-              <div
-                className={`text-sm font-mono tabular-nums ${
-                  it.accent === "positive"
-                    ? "text-emerald-300"
-                    : it.accent === "negative"
-                      ? "text-rose-300"
-                      : "text-neutral-100"
-                }`}
-              >
-                {it.value}
-              </div>
-              {it.pct != null && (
-                <div className="relative h-1 rounded-sm overflow-hidden bg-neutral-500/10">
-                  <div
-                    className={`absolute inset-y-0 left-0 ${
-                      it.pct > 0.8
-                        ? "bg-rose-500/70"
-                        : it.pct > 0.5
-                          ? "bg-amber-500/70"
-                          : "bg-emerald-500/60"
-                    }`}
-                    style={{ width: `${it.pct * 100}%` }}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </Panel>
+      <RiskStatusBanner
+        status={state?.risk_status ?? "—"}
+        quoteActive={state?.strategy.quote_active ?? false}
+        notionalPct={notionalPct}
+        lossPct={lossPct}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0">
+        <Panel>
+          <LimitGaugeCard
+            title="Notional consumption"
+            pct={notionalPct}
+            currentLabel="Exposure"
+            currentValue={formatUsd(portfolio?.exposure_usd, 0)}
+            capLabel="Max notional"
+            capValue={formatUsd(cfg?.max_notional_exposure, 0)}
+            headroomLabel={`${formatUsd(notionalHeadroom, 0)} free`}
+          />
+        </Panel>
+        <Panel>
+          <LimitGaugeCard
+            title="Loss consumption"
+            pct={lossPct}
+            currentLabel="Drawdown"
+            currentValue={formatUsd(portfolio?.drawdown, 0)}
+            capLabel="Max loss"
+            capValue={formatUsd(cfg?.max_loss, 0)}
+            headroomLabel={`${formatUsd(lossHeadroom, 0)} buffer`}
+          />
+        </Panel>
+        <Panel title="Quote configuration" subtitle="Live spread / skew vs base">
+          <QuoteConfigCard strategy={state?.strategy} />
+        </Panel>
+        <Panel title="Inventory" subtitle="Position sized in order-units">
+          <InventoryCard
+            strategy={state?.strategy}
+            portfolio={portfolio}
+            mid={state?.mid_price ?? null}
+          />
+        </Panel>
+      </div>
     </TabShell>
   );
 }
