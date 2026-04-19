@@ -229,7 +229,7 @@ function ExpandableKpiCard({
           type="button"
           onClick={() => onToggle(id)}
           aria-label="Close details"
-          className="fade-in absolute -inset-2 z-30 text-left rounded-2xl p-3.5
+          className="fade-in absolute -top-2 -left-2 -right-2 z-30 text-left rounded-2xl p-3.5
                      border border-cyan-400/30
                      bg-[linear-gradient(145deg,rgba(20,28,44,0.94),rgba(10,14,24,0.92))]
                      backdrop-blur-2xl
