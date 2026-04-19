@@ -1332,7 +1332,7 @@ function AppContent() {
         : undefined;
 
     return (
-        <div className="min-h-screen bg-[#050510] text-white app-shell">
+        <div className="h-screen overflow-hidden bg-[#050510] text-white app-shell flex flex-col">
             {/* Mobile Header - visible only on mobile */}
             <div className="lg:hidden sticky top-0 z-40 mobile-top-bar">
                 <div className="flex items-center justify-between px-3 py-2.5">
@@ -1350,12 +1350,12 @@ function AppContent() {
 
             {/* Main Layout */}
             <div className={cn(
-                "mx-auto py-1.5 sm:py-3 lg:py-4",
+                "mx-auto py-1.5 sm:py-3 lg:py-4 flex-1 min-h-0 w-full flex flex-col",
                 appMode === 'backtest'
                     ? "px-3 sm:px-4 lg:px-6"
                     : "max-w-[1920px] px-2 sm:px-3 lg:px-8"
             )}>
-                <div className="flex gap-2 sm:gap-3 lg:gap-6">
+                <div className="flex gap-2 sm:gap-3 lg:gap-6 flex-1 min-h-0">
                     {/* Sidebar (hidden in backtest mode) */}
                     <aside className={cn("hidden lg:block w-56 flex-shrink-0", appMode === 'backtest' && "lg:hidden")}>
                         <div
@@ -1420,7 +1420,7 @@ function AppContent() {
                     </aside>
 
                     {/* Main Content */}
-                    <main className="flex-1 min-w-0 space-y-2 sm:space-y-3 lg:space-y-4">
+                    <main className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 sm:gap-3 lg:gap-4 overflow-hidden">
                         {/* Header Controls (hidden in backtest mode) */}
                         {appMode !== 'backtest' && (
                             <HeaderControls
@@ -1493,7 +1493,7 @@ function AppContent() {
 
                         {/* Tab Content */}
                         <TabBoundary>
-                            <div className="h-full">
+                            <div className="flex-1 min-h-0 h-full">
                                 {(() => {
                                     const modeEntries = (
                                         tabCacheByMode[appMode].length > 0

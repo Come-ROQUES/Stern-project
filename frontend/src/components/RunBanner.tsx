@@ -18,6 +18,7 @@ import { formatDateTimeUTC, formatTime } from '../lib/dateUtils';
 import { Activity, Clock, AlertTriangle, Zap, Signal, RefreshCw, ChevronDown, RotateCcw, Database } from 'lucide-react';
 import { api, type UiStatus } from '../lib/api';
 import { activeContext } from '../lib/activeContext';
+import { strategyLabel, strategyShortLabel } from '../lib/strategies';
 import { useRunContext } from '../lib/useRunContext';
 import {
     autoSyncBundleS2RunId,
@@ -399,6 +400,8 @@ export function RunBanner({ strategy, compact = false, showRefresh = true, showS
     // Compact version
     if (compact) {
         const modeLabel = (run?.source || 'paper').toUpperCase();
+        const primaryStrategyLabel = strategyLabel(run?.strategy_id);
+        const primaryStrategyShort = strategyShortLabel(run?.strategy_id);
         const relayTone = resolveRelayTone(uiStatus?.relay?.last_ingest_ts ?? null);
         const ingestLabel = formatTime(uiStatus?.relay?.last_ingest_ts ?? null, 'UTC');
         return (
@@ -411,8 +414,11 @@ export function RunBanner({ strategy, compact = false, showRefresh = true, showS
                         <div className={`h-2 w-2 rounded-full animate-pulse ${isCanonical ? 'bg-emerald-500' : 'bg-amber-500'}`}></div>
                         <div className="min-w-0">
                             <div className="flex items-center gap-2">
+                                <span className="rounded px-1.5 py-0.5 text-[10px] bg-white/10 text-neutral-100">
+                                    STERN
+                                </span>
                                 <span className="text-[11px] font-mono text-neutral-200">
-                                    DW:{shortId(dwRunIdEffective)}
+                                    RUN {shortId(dwRunIdEffective)}
                                 </span>
                                 {isOverridden && (
                                     <span className="text-[10px] text-yellow-300 px-1.5 py-0.5 border border-yellow-400/30 rounded-lg">
@@ -427,7 +433,12 @@ export function RunBanner({ strategy, compact = false, showRefresh = true, showS
                                 </span>
                             </div>
                             <div className="mt-0.5 flex items-center gap-3 text-[10px] text-neutral-400">
-                                <span className="truncate">{run?.strategy_id}</span>
+                                <span className="truncate text-neutral-200">
+                                    {primaryStrategyLabel}
+                                </span>
+                                <span className="rounded px-1.5 py-0.5 border border-white/10 text-neutral-300">
+                                    {primaryStrategyShort}
+                                </span>
                                 <span className="text-neutral-500">{getSessionDuration(run?.start_ts)}</span>
                                 <span className="text-neutral-200">INGEST {ingestLabel}</span>
                             </div>
@@ -438,26 +449,26 @@ export function RunBanner({ strategy, compact = false, showRefresh = true, showS
                             onClick={handleResetToActive}
                             className="shrink-0 rounded-lg border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-1 text-[10px] uppercase tracking-wide text-yellow-300 hover:bg-yellow-500/15"
                         >
-                            Reset
+                            Sync active
                         </button>
                     )}
                 </div>
 
                 <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 text-[10px] text-neutral-400">
                     <span className="font-mono text-neutral-300">
-                        S2:{shortId(s2RunIdEffective)}
+                        MIC {shortId(s2RunIdEffective)}
                     </span>
                     <span className="font-mono text-neutral-300">
-                        S3:{shortId(tfRunIdEffective)}
+                        TRL {shortId(tfRunIdEffective)}
                     </span>
                     {isTfOverridden && (
                         <button
                             onClick={handleResetTf}
                             disabled={tfResetting}
                             className="rounded-lg border border-yellow-500/30 px-2.5 py-1 text-[10px] uppercase tracking-wide text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Reset S3 vers le run actif"
+                            title="Synchroniser TRL vers le run actif"
                         >
-                            {tfResetting ? 'Reset…' : 'Reset S3'}
+                            {tfResetting ? 'Sync…' : 'Sync TRL'}
                         </button>
                     )}
                     {isS2Overridden && (
@@ -465,9 +476,9 @@ export function RunBanner({ strategy, compact = false, showRefresh = true, showS
                             onClick={handleResetS2}
                             disabled={s2Resetting}
                             className="rounded-lg border border-yellow-500/30 px-2.5 py-1 text-[10px] uppercase tracking-wide text-yellow-300 transition hover:border-yellow-400 hover:text-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Reset S2 vers le run actif"
+                            title="Synchroniser MIC vers le run actif"
                         >
-                            {s2Resetting ? 'Reset…' : 'Reset S2'}
+                            {s2Resetting ? 'Sync…' : 'Sync MIC'}
                         </button>
                     )}
                 </div>

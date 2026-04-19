@@ -19,7 +19,6 @@ import React, {
 import type { AppMode, FractalMode } from '../lib/navModel';
 import { GlassBadge } from './ui/glass';
 import { cn } from '../lib/utils';
-import { resetUiState } from '../lib/uiStateVersion';
 
 // =============================================================================
 // FRACTAL_MODE Context
@@ -271,12 +270,6 @@ export function HeaderControls({
         setAppMode,
     } = useFractalMode();
     const handleAppModeChange = onAppModeChange ?? setAppMode;
-    const handleResetUi = () => {
-        resetUiState();
-        if (typeof window !== 'undefined') {
-            window.location.reload();
-        }
-    };
 
     return (
         <div className={cn(
@@ -291,17 +284,6 @@ export function HeaderControls({
 
             {/* Right: Mode badge + app mode */}
             <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3">
-                <button
-                    onClick={handleResetUi}
-                    className={cn(
-                        'hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border',
-                        'border-white/[0.12] text-neutral-300 text-[10px] uppercase tracking-[0.14em]',
-                        'bg-white/[0.04] hover:bg-white/[0.08] hover:text-white transition-all'
-                    )}
-                    title="Reset UI local state"
-                >
-                    Reset UI
-                </button>
                 <div className="flex items-center gap-2">
                     <AppModeSwitch value={appMode} onChange={handleAppModeChange} />
                     <ModeBadge mode={mode} />

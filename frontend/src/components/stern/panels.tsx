@@ -17,8 +17,10 @@ import {
   type BookLevel,
   type MidPoint,
   type PublicTrade,
+  type QuantLabSnapshot,
   type SimFill,
   type SpreadMetric,
+  type SpreadRegime,
   type SternState,
 } from "../../lib/sternApi";
 import {
@@ -31,7 +33,7 @@ import {
 } from "./format";
 
 // ============================================================================
-// Shared UI primitives (glass-styled, Fractal-consistent)
+// Shared UI primitives (glass-styled, Stern-consistent)
 // ============================================================================
 
 function Panel({
@@ -39,25 +41,66 @@ function Panel({
   subtitle,
   children,
   className,
+  bodyClassName,
+  headerRight,
 }: {
   title?: string;
   subtitle?: string;
   children: React.ReactNode;
   className?: string;
+  bodyClassName?: string;
+  headerRight?: ReactNode;
 }) {
   return (
-    <div className={`glass-panel p-4 ${className ?? ""}`}>
+    <div className={`glass-panel p-3 min-h-0 flex flex-col ${className ?? ""}`}>
       {title && (
-        <div className="mb-3">
-          <h3 className="text-sm font-semibold text-neutral-200 tracking-tight">
-            {title}
-          </h3>
-          {subtitle && (
-            <p className="text-xs text-neutral-500 mt-0.5">{subtitle}</p>
-          )}
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-xs font-semibold text-neutral-200 tracking-tight truncate">
+              {title}
+            </h3>
+            {subtitle && (
+              <p className="text-[10px] text-neutral-500 mt-0.5 truncate">{subtitle}</p>
+            )}
+          </div>
+          {headerRight && <div className="flex-shrink-0">{headerRight}</div>}
         </div>
       )}
-      {children}
+      <div className={`flex-1 min-h-0 ${bodyClassName ?? ""}`}>{children}</div>
+    </div>
+  );
+}
+
+// TabShell — full-viewport, no-scroll tab container. All tabs must fit in
+// 100vw × 100vh with responsive flex/grid layout. Only inner scrollable
+// regions (tables, tape) may overflow-auto — never the tab itself.
+function TabShell({
+  title,
+  subtitle,
+  children,
+  toolbar,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+  toolbar?: ReactNode;
+}) {
+  return (
+    <div className="h-full min-h-0 flex flex-col gap-2 p-3 overflow-hidden">
+      <div className="flex items-baseline justify-between gap-3 flex-shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-neutral-100 tracking-tight truncate">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-[11px] text-neutral-500 mt-0.5 truncate">{subtitle}</p>
+          )}
+        </div>
+        {toolbar && <div className="flex-shrink-0">{toolbar}</div>}
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+        {children}
+      </div>
     </div>
   );
 }
@@ -83,26 +126,6 @@ function Kpi({
         {label}
       </span>
       <span className={`text-xl font-mono font-semibold ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-function PanelHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle: string;
-  state?: SternState | null;
-}) {
-  return (
-    <div className="flex items-end justify-between mb-4">
-      <div>
-        <h2 className="text-lg font-semibold text-neutral-100 tracking-tight">
-          {title}
-        </h2>
-        <p className="text-xs text-neutral-500 mt-0.5">{subtitle}</p>
-      </div>
     </div>
   );
 }
@@ -185,16 +208,16 @@ function ExpandableKpiCard({
       type="button"
       onClick={() => onToggle(id)}
       aria-expanded={expanded}
-      className={`glass-panel p-4 text-left transition-[grid-column,border-color,background] duration-200 border border-transparent hover:border-neutral-400/30 hover:bg-white/[0.02] focus:outline-none focus:border-cyan-400/40 ${
+      className={`glass-panel p-2.5 text-left transition-[grid-column,border-color,background] duration-200 border border-transparent hover:border-neutral-400/30 hover:bg-white/[0.02] focus:outline-none focus:border-cyan-400/40 ${
         expanded ? "lg:col-span-2 border-neutral-400/25 bg-white/[0.015]" : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <Kpi label={label} value={value} accent={accent} />
         <ChevronIcon expanded={expanded} />
       </div>
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-neutral-500/20 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+        <div className="mt-2 pt-2 border-t border-neutral-500/20 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
           {details}
         </div>
       )}
@@ -230,7 +253,7 @@ function EquityCurveHero({
     if (!container) return;
     const chart = createChart(container, {
       width: container.clientWidth,
-      height: 220,
+      height: container.clientHeight || 160,
       layout: {
         background: { color: "transparent" },
         textColor: "#a1a1aa",
@@ -280,7 +303,10 @@ function EquityCurveHero({
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        chart.applyOptions({ width: Math.max(1, Math.floor(entry.contentRect.width)) });
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(entry.contentRect.width)),
+          height: Math.max(80, Math.floor(entry.contentRect.height)),
+        });
       }
     });
     ro.observe(container);
@@ -388,9 +414,9 @@ function EquityCurveHero({
         </span>
       </div>
       {hasData ? (
-        <div ref={containerRef} className="w-full h-[220px]" />
+        <div ref={containerRef} className="w-full h-[140px] lg:h-[160px]" />
       ) : (
-        <div className="h-[220px] flex items-center justify-center text-sm text-neutral-500">
+        <div className="h-[140px] lg:h-[160px] flex items-center justify-center text-sm text-neutral-500">
           Warming up equity samples…
         </div>
       )}
@@ -427,22 +453,21 @@ export function OverviewPanel() {
   const maxDrawdown = backtest?.max_drawdown_usd ?? portfolio?.drawdown ?? 0;
 
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Crypto MM Overview"
-        subtitle="BTC-USD paper market making — click any card to expand"
-        state={state}
-      />
+    <TabShell
+      title="Crypto MM Overview"
+      subtitle="BTC-USD paper market making — click any card to expand"
+    >
+      <div className="flex-shrink-0 min-h-0">
+        <EquityCurveHero
+          equityCurve={backtest?.equity_curve ?? []}
+          peakEquity={peakEquity}
+          currentEquity={portfolio?.equity ?? 0}
+          returnPct={returnPct}
+          drawdownUsd={portfolio?.drawdown ?? 0}
+        />
+      </div>
 
-      <EquityCurveHero
-        equityCurve={backtest?.equity_curve ?? []}
-        peakEquity={peakEquity}
-        currentEquity={portfolio?.equity ?? 0}
-        returnPct={returnPct}
-        drawdownUsd={portfolio?.drawdown ?? 0}
-      />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
         <ExpandableKpiCard
           id="mid"
           label="Mid"
@@ -559,7 +584,7 @@ export function OverviewPanel() {
         />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
         <ExpandableKpiCard
           id="equity"
           label="Equity"
@@ -685,7 +710,7 @@ export function OverviewPanel() {
           }
         />
       </div>
-    </div>
+    </TabShell>
   );
 }
 
@@ -1016,7 +1041,7 @@ function DepthChart({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [width, setWidth] = useState(600);
+  const [size, setSize] = useState({ w: 600, h: 240 });
   const [hover, setHover] = useState<DepthHover | null>(null);
 
   useEffect(() => {
@@ -1024,14 +1049,17 @@ function DepthChart({
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
       for (const e of entries) {
-        setWidth(Math.max(1, Math.floor(e.contentRect.width)));
+        setSize({
+          w: Math.max(1, Math.floor(e.contentRect.width)),
+          h: Math.max(100, Math.floor(e.contentRect.height)),
+        });
       }
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const H = 240;
+  const H = size.h;
   const PAD = 16;
 
   const model = useMemo(() => {
@@ -1081,14 +1109,14 @@ function DepthChart({
     return (
       <div
         ref={containerRef}
-        className="h-[240px] flex items-center justify-center text-sm text-neutral-500"
+        className="h-full flex items-center justify-center text-sm text-neutral-500"
       >
         Warming up book…
       </div>
     );
   }
 
-  const W = width;
+  const W = size.w;
   const x = (p: number) =>
     PAD + ((p - model.lo) / (model.hi - model.lo)) * (W - 2 * PAD);
   const y = (c: number) => H - PAD - (c / model.maxC) * (H - 2 * PAD);
@@ -1141,7 +1169,7 @@ function DepthChart({
     selectedPrice <= model.hi;
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative h-full">
       <svg
         ref={svgRef}
         width={W}
@@ -1283,7 +1311,7 @@ function CompactTape({ trades }: { trades: PublicTrade[] }) {
   }, [slice]);
 
   return (
-    <div className="glass-scroll max-h-[360px] overflow-auto">
+    <div className="glass-scroll h-full overflow-auto">
       <table className="w-full text-[11px] font-mono">
         <tbody>
           {slice.map((t, i) => {
@@ -1655,8 +1683,8 @@ function SpreadAnalytics({
   }
 
   return (
-    <div>
-      <div className="grid grid-cols-[72px_1fr_80px_80px_72px_72px_16px] gap-2 items-center px-2 py-1.5 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-neutral-500/15">
+    <div className="h-full flex flex-col min-h-0">
+      <div className="grid grid-cols-[72px_1fr_80px_80px_72px_72px_16px] gap-2 items-center px-2 py-1 text-[10px] uppercase tracking-wider text-neutral-500 border-b border-neutral-500/15 flex-shrink-0">
         <span>Depth</span>
         <span>Trend</span>
         <span className="text-right">Last</span>
@@ -1665,6 +1693,7 @@ function SpreadAnalytics({
         <span className="text-right">Max</span>
         <span />
       </div>
+      <div className="flex-1 min-h-0 overflow-auto glass-scroll">
       {depths.map((depth) => {
         const m = metrics[depth];
         const h = history[depth] ?? [];
@@ -1707,9 +1736,9 @@ function SpreadAnalytics({
               <ChevronIcon expanded={exp} />
             </button>
             {exp && (
-              <div className="px-3 pb-4 pt-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="px-3 pb-3 pt-1 grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div className="md:col-span-3">
-                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                  <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
                     <span>Session history</span>
                     <span
                       className={`font-mono normal-case tracking-normal ${trendColor}`}
@@ -1718,17 +1747,17 @@ function SpreadAnalytics({
                       {formatUsd(trend, 2)} recent
                     </span>
                   </div>
-                  <Sparkline values={h} height={72} />
+                  <Sparkline values={h} height={56} />
                   <div className="mt-1 flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
                     <span>{h.length} samples</span>
                     <span>median {formatUsd(m.median, 2)}</span>
                   </div>
                 </div>
                 <div className="md:col-span-2">
-                  <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-1">
                     Distribution
                   </div>
-                  <Histogram values={h} />
+                  <Histogram values={h} height={56} />
                   <div className="mt-1 flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
                     <span>min {formatUsd(m.min, 2)}</span>
                     <span>max {formatUsd(m.max, 2)}</span>
@@ -1739,6 +1768,7 @@ function SpreadAnalytics({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -1748,18 +1778,16 @@ export function ProTerminalPanel() {
   const [selectedPrice, setSelectedPrice] = useState<number | null>(null);
 
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Pro Terminal"
-        subtitle="L2 book · depth curve · tape · trade flow · interactive spread analytics"
-        state={state}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+    <TabShell
+      title="Pro Terminal"
+      subtitle="L2 book · depth curve · tape · trade flow · interactive spread analytics"
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-[3] min-h-0">
         <Panel
           title="L2 Order Book"
           subtitle={`Top ${LADDER_DEPTH} each side · click a rung to pin`}
           className="lg:col-span-4"
+          bodyClassName="overflow-hidden"
         >
           <L2Ladder
             state={state ?? null}
@@ -1785,12 +1813,13 @@ export function ProTerminalPanel() {
           title="Tape"
           subtitle="Last 60 prints · tint ∝ size"
           className="lg:col-span-3"
+          bodyClassName="overflow-hidden"
         >
           <CompactTape trades={state?.recent_trades ?? []} />
         </Panel>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 flex-[2] min-h-0">
         <Panel
           title="Trade Flow"
           subtitle="60s rolling buy / sell volume — hover bars"
@@ -1803,6 +1832,7 @@ export function ProTerminalPanel() {
           title="Depth-weighted Spread"
           subtitle="Per-tier trend · click a row for distribution"
           className="lg:col-span-8"
+          bodyClassName="overflow-hidden"
         >
           <SpreadAnalytics
             metrics={state?.spread_metrics ?? {}}
@@ -1810,7 +1840,7 @@ export function ProTerminalPanel() {
           />
         </Panel>
       </div>
-    </div>
+    </TabShell>
   );
 }
 
@@ -1901,7 +1931,7 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
     if (!container) return;
     const chart = createChart(container, {
       width: container.clientWidth,
-      height: 320,
+      height: container.clientHeight || 320,
       layout: {
         background: { color: "transparent" },
         textColor: "#a1a1aa",
@@ -1948,7 +1978,10 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        chart.applyOptions({ width: Math.max(1, Math.floor(entry.contentRect.width)) });
+        chart.applyOptions({
+          width: Math.max(1, Math.floor(entry.contentRect.width)),
+          height: Math.max(120, Math.floor(entry.contentRect.height)),
+        });
       }
     });
     ro.observe(container);
@@ -2026,7 +2059,7 @@ function CandleChart({ candles, bidPrice, askPrice, markers }: CandleChartProps)
     series.setMarkers(markers);
   }, [markers]);
 
-  return <div ref={containerRef} className="w-full h-80" />;
+  return <div ref={containerRef} className="w-full h-full" />;
 }
 
 export function PriceChartPanel() {
@@ -2065,14 +2098,12 @@ export function PriceChartPanel() {
       : null;
 
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Price Action"
-        subtitle="OHLC candles · MM quote overlay · fill markers"
-        state={state}
-      />
-      <Panel>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+    <TabShell
+      title="Price Action"
+      subtitle="OHLC candles · MM quote overlay · fill markers"
+    >
+      <Panel className="flex-1" bodyClassName="flex flex-col">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-3 flex-shrink-0">
           <div className="flex gap-4 text-xs font-mono items-baseline flex-wrap">
             {stats ? (
               <>
@@ -2135,19 +2166,21 @@ export function PriceChartPanel() {
             ))}
           </div>
         </div>
-        {candles.length < 2 ? (
-          <div className="h-80 flex items-center justify-center text-sm text-neutral-500">
-            Warming up mid history…
-          </div>
-        ) : (
-          <CandleChart
-            candles={candles}
-            bidPrice={state?.quote?.bid_price ?? null}
-            askPrice={state?.quote?.ask_price ?? null}
-            markers={markers}
-          />
-        )}
-        <div className="mt-3 flex items-center gap-x-6 gap-y-1 text-[11px] font-mono text-neutral-400 flex-wrap">
+        <div className="flex-1 min-h-0">
+          {candles.length < 2 ? (
+            <div className="h-full flex items-center justify-center text-sm text-neutral-500">
+              Warming up mid history…
+            </div>
+          ) : (
+            <CandleChart
+              candles={candles}
+              bidPrice={state?.quote?.bid_price ?? null}
+              askPrice={state?.quote?.ask_price ?? null}
+              markers={markers}
+            />
+          )}
+        </div>
+        <div className="mt-2 flex items-center gap-x-6 gap-y-1 text-[11px] font-mono text-neutral-400 flex-wrap flex-shrink-0">
           <span className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 bg-emerald-400 inline-block rounded-sm" />
             Bullish
@@ -2186,7 +2219,7 @@ export function PriceChartPanel() {
           )}
         </div>
       </Panel>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2239,13 +2272,11 @@ export function PortfolioPanel() {
     : 0;
 
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Portfolio"
-        subtitle="Paper MM session — position, PnL and simulated fills"
-        state={state}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <TabShell
+      title="Portfolio"
+      subtitle="Paper MM session — position, PnL and simulated fills"
+    >
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2 flex-shrink-0">
         <Panel>
           <Kpi
             label="Position"
@@ -2260,29 +2291,21 @@ export function PortfolioPanel() {
           />
         </Panel>
         <Panel>
-          <Kpi
-            label="Exposure"
-            value={formatUsd(portfolio?.exposure_usd, 2)}
-          />
+          <Kpi label="Exposure" value={formatUsd(portfolio?.exposure_usd, 2)} />
+        </Panel>
+        <Panel>
+          <Kpi label="Cash" value={formatUsd(portfolio?.cash, 2)} />
         </Panel>
         <Panel>
           <Kpi
-            label="Cash"
-            value={formatUsd(portfolio?.cash, 2)}
-          />
-        </Panel>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Panel>
-          <Kpi
-            label="Realized PnL"
+            label="Realized"
             value={formatUsd(portfolio?.realized_pnl, 2)}
             accent={portfolio ? sign(portfolio.realized_pnl) : "neutral"}
           />
         </Panel>
         <Panel>
           <Kpi
-            label="Unrealized PnL"
+            label="Unrealized"
             value={formatUsd(portfolio?.unrealized_pnl, 2)}
             accent={portfolio ? sign(portfolio.unrealized_pnl) : "neutral"}
           />
@@ -2295,21 +2318,19 @@ export function PortfolioPanel() {
           />
         </Panel>
         <Panel>
-          <Kpi
-            label="Equity"
-            value={formatUsd(portfolio?.equity, 2)}
-          />
+          <Kpi label="Equity" value={formatUsd(portfolio?.equity, 2)} />
         </Panel>
       </div>
       <Panel
         title="Simulated fills"
         subtitle="Most recent MM paper executions"
+        className="flex-1"
       >
-        <div className="glass-scroll max-h-[420px] overflow-auto">
+        <div className="glass-scroll h-full overflow-auto">
           <FillsTable fills={state?.fills ?? []} />
         </div>
       </Panel>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2317,115 +2338,608 @@ export function PortfolioPanel() {
 // Microstructure — realized vol / momentum / imbalance / micro-bias
 // ============================================================================
 
+type MicroKpiKind = "vol" | "momentum" | "bias" | "depth" | "flow";
+
+function classifyVol(bps: number | undefined): string {
+  if (bps == null) return "—";
+  if (bps < 5) return "calm";
+  if (bps < 15) return "normal";
+  if (bps < 30) return "active";
+  return "stressed";
+}
+
+function classifyMagnitude(
+  value: number | undefined,
+  thresholds: [number, number],
+  labels: [string, string, string],
+): string {
+  if (value == null) return "—";
+  const abs = Math.abs(value);
+  if (abs < thresholds[0]) return labels[0];
+  if (abs < thresholds[1]) return labels[1];
+  return labels[2];
+}
+
+function MicroKpiTile({
+  id,
+  label,
+  value,
+  accent,
+  hint,
+  selected,
+  onSelect,
+}: {
+  id: MicroKpiKind;
+  label: string;
+  value: string;
+  accent?: "positive" | "negative" | "neutral";
+  hint: string;
+  selected: boolean;
+  onSelect: (id: MicroKpiKind) => void;
+}) {
+  const color =
+    accent === "positive"
+      ? "text-emerald-300"
+      : accent === "negative"
+        ? "text-rose-300"
+        : "text-neutral-100";
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(id)}
+      aria-pressed={selected}
+      className={`glass-panel p-2 text-left transition-colors border ${
+        selected
+          ? "border-cyan-400/40 bg-white/[0.02]"
+          : "border-transparent hover:border-neutral-400/25"
+      } focus:outline-none focus:border-cyan-400/40 flex flex-col gap-0.5 min-w-0`}
+    >
+      <span className="text-[10px] uppercase tracking-wider text-neutral-500 truncate">
+        {label}
+      </span>
+      <span className={`text-base font-mono font-semibold tabular-nums ${color} truncate`}>
+        {value}
+      </span>
+      <span className="text-[10px] text-neutral-500 truncate">{hint}</span>
+    </button>
+  );
+}
+
+function RegimePill({ state }: { state: SpreadRegime["state"] }) {
+  const styles: Record<SpreadRegime["state"], string> = {
+    tight: "bg-emerald-500/10 text-emerald-300 border-emerald-400/30",
+    wide: "bg-rose-500/10 text-rose-300 border-rose-400/30",
+    balanced: "bg-neutral-500/10 text-neutral-200 border-neutral-400/25",
+    warming: "bg-amber-500/10 text-amber-300 border-amber-400/30",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-[1px] rounded-sm border text-[10px] font-mono ${styles[state]}`}
+    >
+      {state}
+    </span>
+  );
+}
+
+function BookPressureWidget({
+  bids,
+  asks,
+  imbalance,
+}: {
+  bids: BookLevel[];
+  asks: BookLevel[];
+  imbalance: number;
+}) {
+  const bidSlice = bids.slice(0, 5);
+  const askSlice = asks.slice(0, 5);
+  const bidTotal = bidSlice.reduce((s, l) => s + l.size, 0);
+  const askTotal = askSlice.reduce((s, l) => s + l.size, 0);
+  const denom = Math.max(bidTotal + askTotal, 1e-9);
+  const bidPct = (bidTotal / denom) * 100;
+  const askPct = (askTotal / denom) * 100;
+  const pressure = imbalance > 0.05 ? "bid pressure" : imbalance < -0.05 ? "ask pressure" : "balanced";
+  const pressureColor =
+    imbalance > 0.05 ? "text-emerald-300" : imbalance < -0.05 ? "text-rose-300" : "text-neutral-300";
+
+  return (
+    <div className="h-full flex flex-col justify-between gap-2 min-h-0">
+      <div className="flex items-baseline justify-between gap-2 flex-shrink-0">
+        <span className={`text-xs font-mono ${pressureColor}`}>{pressure}</span>
+        <span className="text-[10px] font-mono text-neutral-500 tabular-nums">
+          imb {formatPct(imbalance * 100, 2)}
+        </span>
+      </div>
+      <div className="flex-1 min-h-0 flex flex-col justify-center gap-3">
+        <div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 mb-1">
+            <span className="text-emerald-300">bids</span>
+            <span className="tabular-nums">{bidTotal.toFixed(4)} BTC</span>
+          </div>
+          <div className="relative h-3 rounded-sm overflow-hidden bg-white/[0.02] border border-white/[0.04]">
+            <div
+              className="absolute inset-y-0 left-0 bg-emerald-500/60"
+              style={{ width: `${bidPct}%` }}
+            />
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-neutral-500 mb-1">
+            <span className="text-rose-300">asks</span>
+            <span className="tabular-nums">{askTotal.toFixed(4)} BTC</span>
+          </div>
+          <div className="relative h-3 rounded-sm overflow-hidden bg-white/[0.02] border border-white/[0.04]">
+            <div
+              className="absolute inset-y-0 left-0 bg-rose-500/60"
+              style={{ width: `${askPct}%` }}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-5 gap-1 flex-shrink-0 text-[9px] font-mono text-neutral-500">
+        {Array.from({ length: 5 }).map((_, i) => {
+          const bid = bidSlice[i];
+          const ask = askSlice[i];
+          return (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <span className="text-emerald-300/80 tabular-nums">
+                {bid ? bid.size.toFixed(2) : "—"}
+              </span>
+              <span className="text-neutral-600">L{i + 1}</span>
+              <span className="text-rose-300/80 tabular-nums">
+                {ask ? ask.size.toFixed(2) : "—"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function useCvdSeries(trades: PublicTrade[], maxPoints = 90): number[] {
+  const [series, setSeries] = useState<number[]>([]);
+  const lastKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (trades.length === 0) return;
+    const keyOf = (t: PublicTrade) => `${t.trade_id ?? ""}-${t.ts}-${t.price}`;
+    const newestKey = keyOf(trades[0]);
+    if (newestKey === lastKeyRef.current) return;
+    let cutoff = trades.length;
+    if (lastKeyRef.current) {
+      const idx = trades.findIndex((t) => keyOf(t) === lastKeyRef.current);
+      if (idx >= 0) cutoff = idx;
+    }
+    const deltas = trades
+      .slice(0, cutoff)
+      .reverse()
+      .map((t) => (t.side === "buy" ? t.size : -t.size));
+    if (deltas.length === 0) {
+      lastKeyRef.current = newestKey;
+      return;
+    }
+    setSeries((prev) => {
+      let last = prev.length > 0 ? prev[prev.length - 1] : 0;
+      const next = prev.slice();
+      for (const d of deltas) {
+        last += d;
+        next.push(last);
+      }
+      return next.slice(-maxPoints);
+    });
+    lastKeyRef.current = newestKey;
+  }, [trades, maxPoints]);
+  return series;
+}
+
+function CvdChart({ series }: { series: number[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 300, h: 120 });
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        setSize({
+          w: Math.max(40, Math.floor(e.contentRect.width)),
+          h: Math.max(40, Math.floor(e.contentRect.height)),
+        });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  if (series.length < 2) {
+    return (
+      <div
+        ref={containerRef}
+        className="h-full flex items-center justify-center text-[11px] text-neutral-600"
+      >
+        warming up flow…
+      </div>
+    );
+  }
+
+  const W = size.w;
+  const H = size.h;
+  const PAD = 4;
+  let min = series[0];
+  let max = series[0];
+  for (const v of series) {
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  const absMax = Math.max(Math.abs(min), Math.abs(max), 1e-9);
+  const lo = -absMax;
+  const hi = absMax;
+  const span = hi - lo;
+  const n = series.length;
+  const x = (i: number) => PAD + (i / Math.max(1, n - 1)) * (W - 2 * PAD);
+  const y = (v: number) => PAD + (1 - (v - lo) / span) * (H - 2 * PAD);
+  const yZero = y(0);
+
+  let linePath = "";
+  let areaPath = "";
+  for (let i = 0; i < n; i++) {
+    const px = x(i);
+    const py = y(series[i]);
+    linePath += `${i === 0 ? "M" : "L"} ${px.toFixed(1)} ${py.toFixed(1)} `;
+    if (i === 0) areaPath = `M ${px.toFixed(1)} ${yZero.toFixed(1)} L ${px.toFixed(1)} ${py.toFixed(1)} `;
+    else areaPath += `L ${px.toFixed(1)} ${py.toFixed(1)} `;
+  }
+  areaPath += `L ${x(n - 1).toFixed(1)} ${yZero.toFixed(1)} Z`;
+
+  const last = series[n - 1];
+  const positive = last >= 0;
+  const stroke = positive ? "#22c55e" : "#ef4444";
+  const fill = positive ? "rgba(34, 197, 94, 0.14)" : "rgba(239, 68, 68, 0.14)";
+
+  const handleMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const rel = ((e.clientX - rect.left) / rect.width) * W;
+    const idx = Math.max(0, Math.min(n - 1, Math.round(((rel - PAD) / (W - 2 * PAD)) * (n - 1))));
+    setHoverIdx(idx);
+  };
+
+  return (
+    <div ref={containerRef} className="relative h-full min-h-0">
+      <svg
+        width={W}
+        height={H}
+        onMouseMove={handleMove}
+        onMouseLeave={() => setHoverIdx(null)}
+        className="select-none cursor-crosshair block"
+      >
+        <line
+          x1={PAD}
+          x2={W - PAD}
+          y1={yZero}
+          y2={yZero}
+          stroke="rgba(148, 163, 184, 0.35)"
+          strokeDasharray="2 3"
+        />
+        <path d={areaPath} fill={fill} />
+        <path
+          d={linePath}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1.25"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <circle cx={x(n - 1)} cy={y(last)} r="2" fill={stroke} />
+        {hoverIdx != null && (
+          <>
+            <line
+              x1={x(hoverIdx)}
+              x2={x(hoverIdx)}
+              y1={PAD}
+              y2={H - PAD}
+              stroke="rgba(255,255,255,0.35)"
+            />
+            <circle cx={x(hoverIdx)} cy={y(series[hoverIdx])} r="2.25" fill="#f8fafc" />
+          </>
+        )}
+      </svg>
+      {hoverIdx != null && (
+        <div
+          className="absolute text-[10px] font-mono pointer-events-none px-1.5 py-0.5 rounded bg-neutral-900/95 border border-neutral-500/30 text-neutral-100"
+          style={{ left: Math.min(W - 90, Math.max(2, x(hoverIdx) + 6)), top: 2 }}
+        >
+          <span className="tabular-nums">Σ {series[hoverIdx].toFixed(4)} BTC</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpreadRegimesGrid({
+  regimes,
+  history,
+}: {
+  regimes: SpreadRegime[];
+  history: Record<string, number[]>;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  if (regimes.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-[11px] text-neutral-600">
+        warming up regimes…
+      </div>
+    );
+  }
+  return (
+    <div className="h-full min-h-0 flex flex-col gap-1">
+      {regimes.map((regime) => {
+        const active = selected === regime.depth;
+        const series = history[regime.depth] ?? [];
+        const delta =
+          regime.last != null && regime.avg != null ? regime.last - regime.avg : null;
+        return (
+          <button
+            type="button"
+            key={regime.depth}
+            onClick={() => setSelected(active ? null : regime.depth)}
+            aria-expanded={active}
+            className={`glass-panel p-1.5 text-left transition-colors border ${
+              active
+                ? "border-cyan-400/40 bg-white/[0.02]"
+                : "border-transparent hover:border-neutral-400/25"
+            } focus:outline-none focus:border-cyan-400/40 ${active ? "flex-1 min-h-0" : "flex-shrink-0"}`}
+          >
+            <div className="flex items-center gap-2 text-[11px] font-mono">
+              <span className="text-neutral-400 w-10">{regime.depth}</span>
+              <RegimePill state={regime.state} />
+              <span className="ml-auto text-neutral-300 tabular-nums">
+                {formatUsd(regime.last, 2)}
+              </span>
+              <span
+                className={`tabular-nums w-14 text-right ${
+                  delta == null
+                    ? "text-neutral-600"
+                    : delta > 0
+                      ? "text-rose-300"
+                      : "text-emerald-300"
+                }`}
+              >
+                {delta == null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`}
+              </span>
+              <ChevronIcon expanded={active} />
+            </div>
+            {active && (
+              <div className="mt-1.5 h-full min-h-0 flex flex-col gap-1">
+                <div className="flex-1 min-h-0">
+                  <Sparkline
+                    values={series}
+                    width={320}
+                    height={Math.max(40, Math.min(96, series.length > 8 ? 72 : 48))}
+                    stroke="#2ce3ff"
+                    fill="rgba(44, 227, 255, 0.12)"
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] font-mono text-neutral-500 flex-shrink-0">
+                  <span>avg {formatUsd(regime.avg, 2)}</span>
+                  <span>{series.length} samples</span>
+                </div>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PresetCards({
+  presets,
+  currentSpread,
+  currentSkew,
+}: {
+  presets: QuantLabSnapshot["research_presets"];
+  currentSpread: number;
+  currentSkew: number;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
+  if (presets.length === 0) {
+    return (
+      <div className="h-full flex items-center justify-center text-[11px] text-neutral-600">
+        no presets
+      </div>
+    );
+  }
+  return (
+    <div className="h-full min-h-0 grid gap-1.5" style={{ gridTemplateRows: `repeat(${presets.length}, minmax(0, 1fr))` }}>
+      {presets.map((preset) => {
+        const active = selected === preset.name;
+        const dSpread = preset.spread_bps - currentSpread;
+        const dSkew = preset.skew_bps_per_btc - currentSkew;
+        return (
+          <button
+            key={preset.name}
+            type="button"
+            onClick={() => setSelected(active ? null : preset.name)}
+            aria-pressed={active}
+            className={`glass-panel p-2 text-left border transition-colors ${
+              active
+                ? "border-cyan-400/40 bg-white/[0.02]"
+                : "border-transparent hover:border-neutral-400/25"
+            } focus:outline-none focus:border-cyan-400/40 flex flex-col justify-center min-h-0`}
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-xs font-semibold text-neutral-100 truncate">
+                {preset.name}
+              </span>
+              <span className="text-[10px] font-mono text-neutral-400 tabular-nums flex-shrink-0">
+                {preset.spread_bps.toFixed(1)} · {preset.skew_bps_per_btc.toFixed(1)}
+              </span>
+            </div>
+            <div className="text-[10px] text-neutral-500 truncate">{preset.stance}</div>
+            <div className="mt-0.5 flex gap-2 text-[10px] font-mono">
+              <span
+                className={`tabular-nums ${
+                  dSpread > 0 ? "text-rose-300" : dSpread < 0 ? "text-emerald-300" : "text-neutral-500"
+                }`}
+              >
+                Δspread {dSpread > 0 ? "+" : ""}{dSpread.toFixed(1)}
+              </span>
+              <span
+                className={`tabular-nums ${
+                  Math.abs(dSkew) < 1e-6 ? "text-neutral-500" : "text-neutral-300"
+                }`}
+              >
+                Δskew {dSkew > 0 ? "+" : ""}{dSkew.toFixed(1)}
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MicrostructurePanel() {
   const { data: state } = useSternState();
   const q = state?.quant_lab;
+  const cfg = state?.strategy.config;
+  const [focus, setFocus] = useState<MicroKpiKind | null>(null);
+  const cvd = useCvdSeries(state?.recent_trades ?? []);
+
+  const volHint = classifyVol(q?.realized_vol_bps);
+  const momentumHint = classifyMagnitude(
+    q?.momentum_bps,
+    [5, 15],
+    ["drift", "trending", "breakout"],
+  );
+  const biasHint = classifyMagnitude(
+    q?.micro_bias_bps,
+    [1, 3],
+    ["neutral", "leaning", "skewed"],
+  );
+  const depthHint = classifyMagnitude(
+    q ? q.top5_depth_imbalance * 100 : undefined,
+    [5, 15],
+    ["balanced", "tilted", "one-sided"],
+  );
+  const flowHint = classifyMagnitude(
+    q?.trade_flow_imbalance_btc,
+    [0.05, 0.2],
+    ["even", "active", "aggressive"],
+  );
+
+  const focusCopy: Record<MicroKpiKind, string> = {
+    vol: "Realized vol annualized in bps — higher means wider effective spreads help absorb tape noise.",
+    momentum: "Rolling mid return in bps — positive suggests buy-side pressure; negative, sell-side.",
+    bias: "Micro-price bias in bps vs mid — leans toward the heavier side of top-of-book.",
+    depth: "Top-5 depth imbalance — positive means more size on bids than asks.",
+    flow: "Buyer minus seller volume over the window — captures aggressive lift/hit intent.",
+  };
+
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Microstructure"
-        subtitle="Real-time vol, momentum, depth imbalance and micro-bias"
-        state={state}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Panel>
-          <Kpi label="Realized vol" value={formatBps(q?.realized_vol_bps)} />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Momentum"
-            value={formatBps(q?.momentum_bps)}
-            accent={q ? sign(q.momentum_bps) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Micro bias"
-            value={formatBps(q?.micro_bias_bps)}
-            accent={q ? sign(q.micro_bias_bps) : "neutral"}
-          />
-        </Panel>
-        <Panel>
-          <Kpi
-            label="Top5 depth imbalance"
-            value={formatPct((q?.top5_depth_imbalance ?? 0) * 100, 2)}
-            accent={q ? sign(q.top5_depth_imbalance) : "neutral"}
-          />
-        </Panel>
+    <TabShell
+      title="Microstructure"
+      subtitle="Real-time vol, momentum, depth imbalance and micro-bias"
+      toolbar={
+        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-500">
+          <span>
+            readiness{" "}
+            <span
+              className={
+                q?.readiness === "ready" ? "text-emerald-300" : "text-amber-300"
+              }
+            >
+              {q?.readiness ?? "—"}
+            </span>
+          </span>
+          <span className="text-neutral-600">·</span>
+          <span>window {q?.window_points ?? 0}</span>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 flex-shrink-0">
+        <MicroKpiTile
+          id="vol"
+          label="Realized vol"
+          value={formatBps(q?.realized_vol_bps)}
+          hint={volHint}
+          selected={focus === "vol"}
+          onSelect={(id) => setFocus(focus === id ? null : id)}
+        />
+        <MicroKpiTile
+          id="momentum"
+          label="Momentum"
+          value={formatBps(q?.momentum_bps)}
+          accent={q ? sign(q.momentum_bps) : "neutral"}
+          hint={momentumHint}
+          selected={focus === "momentum"}
+          onSelect={(id) => setFocus(focus === id ? null : id)}
+        />
+        <MicroKpiTile
+          id="bias"
+          label="Micro bias"
+          value={formatBps(q?.micro_bias_bps)}
+          accent={q ? sign(q.micro_bias_bps) : "neutral"}
+          hint={biasHint}
+          selected={focus === "bias"}
+          onSelect={(id) => setFocus(focus === id ? null : id)}
+        />
+        <MicroKpiTile
+          id="depth"
+          label="Depth imb."
+          value={formatPct((q?.top5_depth_imbalance ?? 0) * 100, 2)}
+          accent={q ? sign(q.top5_depth_imbalance) : "neutral"}
+          hint={depthHint}
+          selected={focus === "depth"}
+          onSelect={(id) => setFocus(focus === id ? null : id)}
+        />
+        <MicroKpiTile
+          id="flow"
+          label="Flow imb."
+          value={formatBtc(q?.trade_flow_imbalance_btc ?? 0, 3)}
+          accent={q ? sign(q.trade_flow_imbalance_btc) : "neutral"}
+          hint={flowHint}
+          selected={focus === "flow"}
+          onSelect={(id) => setFocus(focus === id ? null : id)}
+        />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <Panel title="Spread regimes" subtitle="Per-depth state vs session avg">
-          <table className="glass-table w-full text-xs font-mono">
-            <thead>
-              <tr>
-                <th className="text-left">Depth</th>
-                <th className="text-left">State</th>
-                <th className="text-right">Last</th>
-                <th className="text-right">Avg</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(q?.spread_regimes ?? []).map((regime) => (
-                <tr key={regime.depth}>
-                  <td className="text-neutral-400">{regime.depth}</td>
-                  <td
-                    className={
-                      regime.state === "tight"
-                        ? "text-emerald-300"
-                        : regime.state === "wide"
-                          ? "text-rose-300"
-                          : regime.state === "balanced"
-                            ? "text-neutral-200"
-                            : "text-amber-300"
-                    }
-                  >
-                    {regime.state}
-                  </td>
-                  <td className="text-right">{formatUsd(regime.last, 2)}</td>
-                  <td className="text-right">{formatUsd(regime.avg, 2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {focus && (
+        <div className="glass-panel px-2 py-1 text-[11px] text-neutral-300 flex items-center gap-2 flex-shrink-0">
+          <span className="text-cyan-300 uppercase tracking-wider text-[9px]">
+            {focus}
+          </span>
+          <span className="truncate">{focusCopy[focus]}</span>
+        </div>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 grid-rows-2 gap-2 flex-1 min-h-0">
+        <Panel title="Book pressure" subtitle="Top-5 cumulative depth">
+          <BookPressureWidget
+            bids={state?.book.bids ?? []}
+            asks={state?.book.asks ?? []}
+            imbalance={q?.top5_depth_imbalance ?? 0}
+          />
         </Panel>
         <Panel
-          title="Research presets"
-          subtitle="Tight / baseline / defensive MM stances"
+          title="Spread regimes"
+          subtitle="Click a depth to see its history vs session avg"
         >
-          <div className="space-y-3 text-sm">
-            {(q?.research_presets ?? []).map((preset) => (
-              <div
-                key={preset.name}
-                className="border-l-2 border-cyan-500/30 pl-3"
-              >
-                <div className="flex justify-between items-baseline">
-                  <span className="font-semibold text-neutral-100">
-                    {preset.name}
-                  </span>
-                  <span className="text-xs font-mono text-neutral-400">
-                    {preset.spread_bps.toFixed(1)} bps ·{" "}
-                    {preset.skew_bps_per_btc.toFixed(1)} bps/BTC
-                  </span>
-                </div>
-                <div className="text-xs text-neutral-500">{preset.stance}</div>
-              </div>
-            ))}
-          </div>
+          <SpreadRegimesGrid
+            regimes={q?.spread_regimes ?? []}
+            history={state?.spread_history ?? {}}
+          />
+        </Panel>
+        <Panel title="Order flow CVD" subtitle="Cumulative buyer − seller volume">
+          <CvdChart series={cvd} />
+        </Panel>
+        <Panel title="Research presets" subtitle="Δ vs current MM config">
+          <PresetCards
+            presets={q?.research_presets ?? []}
+            currentSpread={cfg?.base_quote_spread_bps ?? 0}
+            currentSkew={cfg?.position_skew_bps_per_btc ?? 0}
+          />
         </Panel>
       </div>
-      <Panel>
-        <div className="flex justify-between text-xs font-mono text-neutral-500">
-          <span>
-            Readiness:{" "}
-            <span className="text-neutral-300">{q?.readiness ?? "—"}</span>
-          </span>
-          <span>
-            Window: {q?.window_points ?? 0} points · Trade flow imbalance:{" "}
-            {formatBtc(q?.trade_flow_imbalance_btc ?? 0, 4)}
-          </span>
-        </div>
-      </Panel>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2437,58 +2951,91 @@ export function RiskPanel() {
   const { data: state } = useSternState();
   const cfg = state?.strategy.config;
   const portfolio = state?.portfolio;
+  const riskOk = state?.risk_status === "ok";
+  const notionalPct = cfg?.max_notional_exposure
+    ? Math.min(1, (portfolio?.exposure_usd ?? 0) / cfg.max_notional_exposure)
+    : 0;
+  const lossPct = cfg?.max_loss
+    ? Math.min(1, (portfolio?.drawdown ?? 0) / cfg.max_loss)
+    : 0;
+
+  const items: Array<{
+    label: string;
+    value: string;
+    accent?: "positive" | "negative" | "neutral";
+    pct?: number;
+  }> = [
+    {
+      label: "Status",
+      value: state?.risk_status ?? "—",
+      accent: riskOk ? "positive" : "negative",
+    },
+    { label: "Max notional", value: formatUsd(cfg?.max_notional_exposure, 0) },
+    { label: "Max loss", value: formatUsd(cfg?.max_loss, 0) },
+    { label: "Base spread", value: formatBps(cfg?.base_quote_spread_bps) },
+    { label: "Order size", value: formatBtc(cfg?.order_size_btc, 4) },
+    { label: "Skew/BTC", value: formatBps(cfg?.position_skew_bps_per_btc) },
+    {
+      label: "Drawdown",
+      value: formatUsd(portfolio?.drawdown, 2),
+      accent: "negative",
+      pct: lossPct,
+    },
+    {
+      label: "Exposure",
+      value: formatUsd(portfolio?.exposure_usd, 2),
+      pct: notionalPct,
+    },
+  ];
+
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Risk"
-        subtitle="Hard limits guarding the MM session"
-        state={state}
-      />
-      <Panel>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm font-mono">
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Status</div>
+    <TabShell
+      title="Risk"
+      subtitle="Hard limits guarding the MM session"
+    >
+      <Panel
+        title="Limits"
+        subtitle="Notional / drawdown consumption vs configured caps"
+      >
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 h-full content-start">
+          {items.map((it) => (
             <div
-              className={
-                state?.risk_status === "ok"
-                  ? "text-emerald-300"
-                  : "text-amber-300"
-              }
+              key={it.label}
+              className="rounded-md border border-white/[0.05] bg-white/[0.015] p-2.5 flex flex-col gap-1.5"
             >
-              {state?.risk_status ?? "—"}
+              <div className="text-[10px] uppercase tracking-wider text-neutral-500">
+                {it.label}
+              </div>
+              <div
+                className={`text-sm font-mono tabular-nums ${
+                  it.accent === "positive"
+                    ? "text-emerald-300"
+                    : it.accent === "negative"
+                      ? "text-rose-300"
+                      : "text-neutral-100"
+                }`}
+              >
+                {it.value}
+              </div>
+              {it.pct != null && (
+                <div className="relative h-1 rounded-sm overflow-hidden bg-neutral-500/10">
+                  <div
+                    className={`absolute inset-y-0 left-0 ${
+                      it.pct > 0.8
+                        ? "bg-rose-500/70"
+                        : it.pct > 0.5
+                          ? "bg-amber-500/70"
+                          : "bg-emerald-500/60"
+                    }`}
+                    style={{ width: `${it.pct * 100}%` }}
+                  />
+                </div>
+              )}
             </div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Max notional</div>
-            <div>{formatUsd(cfg?.max_notional_exposure, 0)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Max loss</div>
-            <div>{formatUsd(cfg?.max_loss, 0)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Base spread</div>
-            <div>{formatBps(cfg?.base_quote_spread_bps)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Order size</div>
-            <div>{formatBtc(cfg?.order_size_btc, 4)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Skew/BTC</div>
-            <div>{formatBps(cfg?.position_skew_bps_per_btc)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Drawdown</div>
-            <div>{formatUsd(portfolio?.drawdown, 2)}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Exposure</div>
-            <div>{formatUsd(portfolio?.exposure_usd, 2)}</div>
-          </div>
+          ))}
         </div>
       </Panel>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2496,13 +3043,11 @@ export function SystemPanel() {
   const { data: state, error, lastUpdatedAt } = useSternState();
   const runtime = state?.runtime;
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="System"
-        subtitle="Coinbase feed state, message throughput, session uptime"
-        state={state}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <TabShell
+      title="System"
+      subtitle="Coinbase feed state, message throughput, session uptime"
+    >
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 flex-shrink-0">
         <Panel>
           <Kpi
             label="Feed"
@@ -2523,46 +3068,51 @@ export function SystemPanel() {
           />
         </Panel>
         <Panel>
-          <Kpi label="Trades seen" value={runtime?.trade_events.toString() ?? "—"} />
+          <Kpi
+            label="Trades seen"
+            value={runtime?.trade_events.toString() ?? "—"}
+          />
         </Panel>
       </div>
-      <Panel title="Details">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm font-mono">
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Mid ready</div>
-            <div>{runtime?.mid_ready ? "yes" : "no"}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Book bids</div>
-            <div>{runtime?.book_levels.bids ?? 0}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Book asks</div>
-            <div>{runtime?.book_levels.asks ?? 0}</div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Last trade</div>
-            <div className="text-neutral-400">
-              {formatClockTime(runtime?.last_trade_ts)}
-            </div>
-          </div>
-          <div>
-            <div className="text-neutral-500 text-xs mb-1">Client poll</div>
-            <div className="text-neutral-400">
-              {lastUpdatedAt
+      <Panel title="Details" className="flex-1">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm font-mono content-start">
+          <DetailRow label="Mid ready" value={runtime?.mid_ready ? "yes" : "no"} />
+          <DetailRow
+            label="Book bids"
+            value={String(runtime?.book_levels.bids ?? 0)}
+          />
+          <DetailRow
+            label="Book asks"
+            value={String(runtime?.book_levels.asks ?? 0)}
+          />
+          <DetailRow
+            label="Last trade"
+            value={formatClockTime(runtime?.last_trade_ts)}
+          />
+          <DetailRow
+            label="Client poll"
+            value={
+              lastUpdatedAt
                 ? formatClockTime(new Date(lastUpdatedAt).toISOString())
-                : "—"}
+                : "—"
+            }
+          />
+          <div className="col-span-2 lg:col-span-3">
+            <div className="text-[10px] uppercase tracking-wider text-neutral-500 mb-0.5">
+              Error
             </div>
-          </div>
-          <div className="col-span-3">
-            <div className="text-neutral-500 text-xs mb-1">Error</div>
-            <div className={error ? "text-rose-300" : "text-neutral-400"}>
+            <div
+              className={`text-xs font-mono truncate ${
+                error ? "text-rose-300" : "text-neutral-400"
+              }`}
+              title={error ?? "none"}
+            >
               {error ?? "none"}
             </div>
           </div>
         </div>
       </Panel>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2572,61 +3122,53 @@ export function SystemPanel() {
 
 export function ExportPanel() {
   const { data: state } = useSternState();
+  const cards: Array<{
+    title: string;
+    subtitle: string;
+    info: string;
+    kind: "fills" | "pnl" | "spreads";
+  }> = [
+    {
+      title: "Fills",
+      subtitle: "All simulated MM executions (side, price, size, notional, reason)",
+      info: `${state?.fills.length ?? 0} rows available`,
+      kind: "fills",
+    },
+    {
+      title: "PnL curve",
+      subtitle: "Equity, position and total PnL sampled at book-tick cadence",
+      info: "streaming history",
+      kind: "pnl",
+    },
+    {
+      title: "Spread history",
+      subtitle: "Depth-weighted spread samples for 0.1 / 1 / 5 / 10 BTC",
+      info: "4 depth series",
+      kind: "spreads",
+    },
+  ];
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Export"
-        subtitle="Download session data as CSV for offline analysis"
-        state={state}
-      />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Panel
-          title="Fills"
-          subtitle="All simulated MM executions with side, price, size, notional and reason"
-        >
-          <div className="text-xs text-neutral-500 mb-3 font-mono">
-            {state?.fills.length ?? 0} rows available
-          </div>
-          <button
-            type="button"
-            className="glass-panel w-full py-2 text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors"
-            onClick={() => downloadCsv("fills")}
-          >
-            Download fills.csv
-          </button>
-        </Panel>
-        <Panel
-          title="PnL curve"
-          subtitle="Equity, position and total PnL sampled at book-tick cadence"
-        >
-          <div className="text-xs text-neutral-500 mb-3 font-mono">
-            window — streaming history
-          </div>
-          <button
-            type="button"
-            className="glass-panel w-full py-2 text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors"
-            onClick={() => downloadCsv("pnl")}
-          >
-            Download pnl.csv
-          </button>
-        </Panel>
-        <Panel
-          title="Spread history"
-          subtitle="Depth-weighted spread samples for 0.1 / 1 / 5 / 10 BTC"
-        >
-          <div className="text-xs text-neutral-500 mb-3 font-mono">
-            4 depth series
-          </div>
-          <button
-            type="button"
-            className="glass-panel w-full py-2 text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors"
-            onClick={() => downloadCsv("spreads")}
-          >
-            Download spreads.csv
-          </button>
-        </Panel>
+    <TabShell
+      title="Export"
+      subtitle="Download session data as CSV for offline analysis"
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
+        {cards.map((c) => (
+          <Panel key={c.kind} title={c.title} subtitle={c.subtitle}>
+            <div className="h-full flex flex-col justify-between">
+              <div className="text-[11px] text-neutral-500 font-mono">{c.info}</div>
+              <button
+                type="button"
+                className="glass-panel w-full py-2 text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors"
+                onClick={() => downloadCsv(c.kind)}
+              >
+                Download {c.kind}.csv
+              </button>
+            </div>
+          </Panel>
+        ))}
       </div>
-    </div>
+    </TabShell>
   );
 }
 
@@ -2638,13 +3180,11 @@ export function BacktestCockpitPanel() {
   const { data: state } = useSternState();
   const bt = state?.backtest_lite;
   return (
-    <div className="p-6 space-y-4">
-      <PanelHeader
-        title="Paper Session Replay"
-        subtitle="Lite backtest over the live MM paper session"
-        state={state}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <TabShell
+      title="Paper Session Replay"
+      subtitle="Lite backtest over the live MM paper session"
+    >
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2 flex-shrink-0">
         <Panel>
           <Kpi
             label="Return"
@@ -2660,10 +3200,7 @@ export function BacktestCockpitPanel() {
           />
         </Panel>
         <Panel>
-          <Kpi
-            label="Peak equity"
-            value={formatUsd(bt?.peak_equity_usd, 2)}
-          />
+          <Kpi label="Peak equity" value={formatUsd(bt?.peak_equity_usd, 2)} />
         </Panel>
         <Panel>
           <Kpi
@@ -2672,13 +3209,8 @@ export function BacktestCockpitPanel() {
             accent={bt && bt.max_drawdown_usd > 0 ? "negative" : "neutral"}
           />
         </Panel>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Panel>
-          <Kpi
-            label="Fills"
-            value={bt?.fill_count.toString() ?? "—"}
-          />
+          <Kpi label="Fills" value={bt?.fill_count.toString() ?? "—"} />
         </Panel>
         <Panel>
           <Kpi
@@ -2687,10 +3219,7 @@ export function BacktestCockpitPanel() {
           />
         </Panel>
         <Panel>
-          <Kpi
-            label="Fill notional"
-            value={formatUsd(bt?.fill_notional_usd, 2)}
-          />
+          <Kpi label="Fill notional" value={formatUsd(bt?.fill_notional_usd, 2)} />
         </Panel>
         <Panel>
           <Kpi
@@ -2699,13 +3228,15 @@ export function BacktestCockpitPanel() {
           />
         </Panel>
       </div>
-      <Panel title="Equity curve" subtitle="Last 60 samples of paper equity">
-        <MiniCurve values={bt?.equity_curve ?? []} stroke="#2ce3ff" />
-      </Panel>
-      <Panel title="PnL curve" subtitle="Cumulative realized + unrealized PnL">
-        <MiniCurve values={bt?.pnl_curve ?? []} stroke="#34d399" />
-      </Panel>
-    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 flex-1 min-h-0">
+        <Panel title="Equity curve" subtitle="Last 60 samples of paper equity">
+          <MiniCurve values={bt?.equity_curve ?? []} stroke="#2ce3ff" />
+        </Panel>
+        <Panel title="PnL curve" subtitle="Cumulative realized + unrealized PnL">
+          <MiniCurve values={bt?.pnl_curve ?? []} stroke="#34d399" />
+        </Panel>
+      </div>
+    </TabShell>
   );
 }
 
@@ -2718,7 +3249,7 @@ function MiniCurve({
 }) {
   if (values.length < 2) {
     return (
-      <div className="h-32 flex items-center justify-center text-sm text-neutral-500">
+      <div className="h-full flex items-center justify-center text-sm text-neutral-500">
         Warming up…
       </div>
     );
@@ -2736,7 +3267,11 @@ function MiniCurve({
     })
     .join(" ");
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32">
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+      className="w-full h-full"
+    >
       <path
         d={path}
         fill="none"
