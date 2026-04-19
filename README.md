@@ -1,5 +1,8 @@
 # Stern — Crypto Trading Desk
 
+<img width="2850" height="1610" alt="image" src="https://github.com/user-attachments/assets/a68e1166-b2dc-4ee6-a60b-8cef87b9615e" />
+
+
 Un desk de market making crypto complet, du flux Coinbase en temps reel
 jusqu'au cockpit type terminal de trading. Python asynchrone en backend,
 React avec design liquid-glass en frontend, deploye 24h/24 sur VM.
