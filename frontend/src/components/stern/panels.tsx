@@ -2527,13 +2527,13 @@ function FillFlowStats({ fills }: { fills: SimFill[] }) {
   }, [fills]);
 
   return (
-    <div className="h-full grid grid-cols-2 gap-4">
-      <div className="flex flex-col justify-center gap-2 min-w-0">
+    <div className="h-full grid grid-cols-2 gap-3 min-h-0 overflow-hidden">
+      <div className="flex flex-col justify-center gap-1.5 min-w-0 min-h-0">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-[10px] uppercase tracking-wider text-neutral-500">
             Fills
           </span>
-          <span className="text-lg font-mono font-semibold tabular-nums text-neutral-100">
+          <span className="text-sm font-mono font-semibold tabular-nums text-neutral-100">
             {stats.count}
           </span>
         </div>
@@ -2555,12 +2555,8 @@ function FillFlowStats({ fills }: { fills: SimFill[] }) {
             style={{ width: `${(1 - stats.buyPct) * 100}%` }}
           />
         </div>
-        <div className="flex justify-between text-[10px] font-mono text-neutral-500 tabular-nums">
-          <span>{formatBtc(stats.buyVol, 4)}</span>
-          <span>{formatBtc(stats.sellVol, 4)}</span>
-        </div>
       </div>
-      <div className="flex flex-col gap-1 text-[11px] font-mono justify-center min-w-0">
+      <div className="flex flex-col gap-0.5 text-[11px] font-mono justify-center min-w-0 min-h-0">
         <div className="flex justify-between items-baseline gap-2">
           <span className="text-neutral-500 text-[10px] uppercase tracking-wider">
             Volume
@@ -2696,7 +2692,8 @@ export function PortfolioPanel() {
           <Panel
             title="Position"
             subtitle="Inventory, avg entry and mark-to-market drift"
-            className="flex-shrink-0 h-[128px]"
+            className="flex-shrink-0 h-[128px] overflow-hidden"
+            bodyClassName="overflow-hidden"
           >
             <PositionCard
               portfolio={portfolio}
@@ -2708,7 +2705,8 @@ export function PortfolioPanel() {
           <Panel
             title="Session flow"
             subtitle="Buy / sell split, avg fill size, VWAP"
-            className="flex-shrink-0 h-[128px]"
+            className="flex-shrink-0 h-[128px] overflow-hidden"
+            bodyClassName="overflow-hidden"
           >
             <FillFlowStats fills={state?.fills ?? []} />
           </Panel>
