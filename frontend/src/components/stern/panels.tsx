@@ -283,6 +283,8 @@ function EquityCurveHero({
 
     const latest = normalized.length > 0 ? normalized[normalized.length - 1] : null;
     if (Number.isFinite(currentEquity)) {
+      // Append the live portfolio equity if the backtest-lite curve has not
+      // caught up yet, so the hero always reflects the freshest mark-to-market.
       if (latest == null) {
         normalized.push(currentEquity);
       } else if (Math.abs(latest - currentEquity) >= 0.005) {
@@ -1156,6 +1158,8 @@ function DepthChart({
     const bestAsk = askPts[0]?.price ?? mid;
     const worstBid = bidPts[bidPts.length - 1]?.price ?? bestBid;
     const worstAsk = askPts[askPts.length - 1]?.price ?? bestAsk;
+    // Use a symmetric domain around mid so bid/ask depth stays visually
+    // comparable even when one side of the book extends farther than the other.
     const half = Math.max(Math.abs(mid - worstBid), Math.abs(worstAsk - mid));
     const pad = Math.max(half * 0.05, 0.01);
     const lo = mid - half - pad;
@@ -1228,8 +1232,11 @@ function DepthChart({
     const side: "bid" | "ask" = price < mid ? "bid" : "ask";
     let cum = 0;
     if (side === "bid") {
+      // Bid depth is cumulative from best bid downward, so a hovered price
+      // consumes every bid level still priced at or above that point.
       for (const pt of model.bidPts) if (pt.price >= price) cum = pt.cum;
     } else {
+      // Ask depth mirrors the same idea on the offer side from best ask upward.
       for (const pt of model.askPts) if (pt.price <= price) cum = pt.cum;
     }
     setHover({ x: pxPos, price, cum, side });
@@ -2038,6 +2045,8 @@ function buildFillMarkers(
     });
   }
   out.sort((a, b) => (a.time as number) - (b.time as number));
+  // Keep only the most recent markers so the chart remains legible on dense
+  // sessions instead of turning into an unreadable wall of arrows.
   return out.length > MAX_MARKERS ? out.slice(out.length - MAX_MARKERS) : out;
 }
 

@@ -239,6 +239,8 @@ class MarketDataService:
             return
         self._last_analytics_at = now
         self._last_vol_bps = self._realized_vol_bps()
+        # Re-price once with the refreshed vol input so strategy telemetry and
+        # UI panels reflect the same effective spread regime as analytics.
         quote = self.market_maker.update_quote(
             mid_price=mid,
             realized_vol_bps=self._last_vol_bps,
@@ -276,6 +278,8 @@ class MarketDataService:
             return
         self._last_publish_at = now
         self._state_version += 1
+        # A single event fan-outs to both /api/state snapshots and the SSE
+        # stream, which keeps frontend consumers synchronized on one backend cadence.
         self._state_event.set()
 
     def _handle_market_trades_message(self, message: dict[str, object]) -> None:
