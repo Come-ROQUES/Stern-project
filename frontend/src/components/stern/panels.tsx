@@ -204,25 +204,47 @@ function ExpandableKpiCard({
   onToggle: (id: string) => void;
   details: ReactNode;
 }) {
+  // The popover is absolute-positioned over the base card so neighbors never
+  // reflow when a card is expanded. -inset-2 fills the grid gap exactly so
+  // the popover visibly grows past the card footprint without pushing siblings.
   return (
-    <button
-      type="button"
-      onClick={() => onToggle(id)}
-      aria-expanded={expanded}
-      className={`glass-panel p-2.5 text-left transition-[grid-column,border-color,background] duration-200 border border-transparent hover:border-neutral-400/30 hover:bg-white/[0.02] focus:outline-none focus:border-cyan-400/40 ${
-        expanded ? "lg:col-span-2 border-neutral-400/25 bg-white/[0.015]" : ""
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <Kpi label={label} value={value} accent={accent} />
-        <ChevronIcon expanded={expanded} />
-      </div>
-      {expanded && (
-        <div className="mt-2 pt-2 border-t border-neutral-500/20 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          {details}
+    <div className="relative" data-kpi-card>
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        aria-expanded={expanded}
+        className={`glass-panel w-full p-2.5 text-left transition-colors duration-200 border ${
+          expanded
+            ? "border-cyan-400/30 bg-white/[0.015]"
+            : "border-transparent hover:border-neutral-400/30 hover:bg-white/[0.02]"
+        } focus:outline-none focus:border-cyan-400/40`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <Kpi label={label} value={value} accent={accent} />
+          <ChevronIcon expanded={expanded} />
         </div>
+      </button>
+      {expanded && (
+        <button
+          type="button"
+          onClick={() => onToggle(id)}
+          aria-label="Close details"
+          className="fade-in absolute -inset-2 z-30 text-left rounded-2xl p-3.5
+                     border border-cyan-400/30
+                     bg-[linear-gradient(145deg,rgba(20,28,44,0.94),rgba(10,14,24,0.92))]
+                     backdrop-blur-2xl
+                     shadow-[0_30px_80px_-20px_rgba(0,0,0,0.85),0_0_0_1px_rgba(0,255,136,0.06),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <Kpi label={label} value={value} accent={accent} />
+            <ChevronIcon expanded={expanded} />
+          </div>
+          <div className="mt-2.5 pt-2.5 border-t border-white/10 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+            {details}
+          </div>
+        </button>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -430,6 +452,23 @@ export function OverviewPanel() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const toggle = (id: string) =>
     setExpanded((prev) => (prev === id ? null : id));
+
+  useEffect(() => {
+    if (expanded == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(null);
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && !target.closest("[data-kpi-card]")) setExpanded(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onMouseDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onMouseDown);
+    };
+  }, [expanded]);
 
   const portfolio = state?.portfolio;
   const strategy = state?.strategy;
