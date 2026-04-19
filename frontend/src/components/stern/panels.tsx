@@ -2749,7 +2749,7 @@ export function PortfolioPanel() {
           <Panel
             title="Position"
             subtitle="Inventory, avg entry and mark-to-market drift"
-            className="flex-shrink-0 h-[124px] overflow-hidden"
+            className="flex-shrink-0 h-[148px] overflow-hidden"
             bodyClassName="overflow-hidden"
           >
             <PositionCard
@@ -2762,7 +2762,7 @@ export function PortfolioPanel() {
           <Panel
             title="Session flow"
             subtitle="Buy / sell split, avg fill size, VWAP"
-            className="flex-shrink-0 h-[124px] overflow-hidden"
+            className="flex-shrink-0 h-[148px] overflow-hidden"
             bodyClassName="overflow-hidden"
           >
             <FillFlowStats fills={state?.fills ?? []} />
