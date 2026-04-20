@@ -314,6 +314,9 @@ class MarketDataService:
                 fill = self.market_maker.maybe_fill(trade)
                 if fill is not None:
                     self.simulated_fills.appendleft(fill.model_dump(mode="json"))
+                    mid = self.order_book.mid_price()
+                    if mid is not None:
+                        self.market_maker.update_quote(mid, self._last_vol_bps)
 
     async def state_snapshot(self) -> dict[str, object]:
         top = self.order_book.top_n(10)

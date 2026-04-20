@@ -19,11 +19,11 @@ class Settings(BaseSettings):
     max_loss: float = 100_000.0
     # Demo-friendly defaults: tight enough to illustrate fills on BTC-USD while
     # still remaining a simple mid-price market-making exercise.
-    base_quote_spread_bps: float = 1.5
+    base_quote_spread_bps: float = 8.0
     order_size_btc: float = 0.1
     position_skew_bps_per_btc: float = 2.0
-    vol_adaptive_gain: float = 0.15
-    vol_adaptive_cap_bps: float = 3.0
+    vol_adaptive_gain: float = 1.0
+    vol_adaptive_cap_bps: float = 20.0
     trade_history_limit: int = 200
     # Optional Telegram alerts. Disabled when either field is empty.
     telegram_bot_token: str = ""
