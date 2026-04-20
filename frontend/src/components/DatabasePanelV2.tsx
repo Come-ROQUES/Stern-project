@@ -44,7 +44,11 @@ interface TablePreview {
     total_count: number;
 }
 
-const API_BASE = 'http://localhost:8001/api';
+const API_BASE = (() => {
+    const envBase = (import.meta.env.VITE_API_URL || "").trim();
+    if (envBase) return `${envBase.replace(/\/$/, "")}/api`;
+    return "/api";
+})();
 
 const TABLE_CATEGORIES = {
     CORE: ['shadow_trades', 'signals'],

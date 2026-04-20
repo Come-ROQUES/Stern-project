@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, StrategyConfig } from "../lib/api";
 
+const API_BASE = (() => {
+  const envBase = (import.meta.env.VITE_API_URL || "").trim();
+  if (envBase) return envBase.replace(/\/$/, "");
+  return "";
+})();
+
 export function ExecutionPanel() {
   const [cfg, setCfg] = useState<StrategyConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +167,7 @@ export function ExecutionPanel() {
                 risk_scale_min: (cfg as any)?.risk_scale_min,
                 risk_scale_max: (cfg as any)?.risk_scale_max,
               };
-              const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8001"}/api/strategy/config`, {
+              const res = await fetch(`${API_BASE}/api/strategy/config`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",

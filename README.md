@@ -12,7 +12,7 @@ React avec design liquid-glass en frontend, deploye 24h/24 sur VM.
 ## Livraison
 
 - Documentation technique de handoff :
-  [TECHNICAL_HANDOFF.md](/Users/comeroques/Stern-project/docs/TECHNICAL_HANDOFF.md)
+  [TECHNICAL_HANDOFF.md](docs/TECHNICAL_HANDOFF.md)
 
 Le service tourne en continu sur une VM sous `systemd` derriere nginx, avec
 deploiement automatique a chaque push sur `main` via GitHub Actions.

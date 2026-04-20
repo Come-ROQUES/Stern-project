@@ -407,4 +407,4 @@ Open:
 
 - Site: https://stern-project.duckdns.org
 - Repo: https://github.com/Come-ROQUES/Stern-project
-- Video: `[[LIEN_VIDEO_DEMO_A_REMPLACER]]`
+- Video: https://youtu.be/0U57Jqk5TsA?si=MAavSLcZWzhSgUKH
