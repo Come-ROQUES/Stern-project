@@ -93,9 +93,9 @@ class MarketMaker:
         bid_price = raw_bid_price
         ask_price = raw_ask_price
         if best_bid is not None:
-            bid_price = max(bid_price, best_bid.price)
+            bid_price = min(bid_price, best_bid.price)
         if best_ask is not None:
-            ask_price = min(ask_price, best_ask.price)
+            ask_price = max(ask_price, best_ask.price)
         if best_ask is not None:
             bid_price = min(bid_price, best_ask.price - MIN_TICK)
         if best_bid is not None:

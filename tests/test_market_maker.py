@@ -80,7 +80,7 @@ def test_market_maker_realizes_positive_spread_on_bid_then_ask_roundtrip() -> No
     assert float(snapshot["realized_pnl"]) > 0.0
 
 
-def test_market_maker_anchors_quotes_to_touch_to_capture_real_spread() -> None:
+def test_market_maker_respects_configured_spread_when_market_is_tighter() -> None:
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
         config=MarketMakerConfig(
@@ -99,8 +99,31 @@ def test_market_maker_anchors_quotes_to_touch_to_capture_real_spread() -> None:
     )
 
     assert quote is not None
+    assert quote.bid_price < 100.0
+    assert quote.ask_price > 100.01
+
+
+def test_market_maker_caps_bid_to_touch_when_configured_spread_is_too_tight() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=0.5,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100.005,
+        best_bid=BookLevel(price=100.0, size=1.0),
+        best_ask=BookLevel(price=100.01, size=1.0),
+    )
+
+    assert quote is not None
     assert quote.bid_price == 100.0
-    assert quote.ask_price == 100.01
+    assert quote.ask_price > 100.01
 
 
 def test_market_maker_does_not_overfill_same_quote_side_without_requote() -> None:
@@ -143,7 +166,7 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
         config=MarketMakerConfig(
-            base_quote_spread_bps=10.0,
+            base_quote_spread_bps=0.5,
             order_size_btc=0.1,
             position_skew_bps_per_btc=0.0,
         ),
@@ -154,7 +177,7 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     quote = maker.update_quote(
         mid_price=100.005,
         best_bid=BookLevel(price=100.0, size=0.2),
-        best_ask=BookLevel(price=100.01, size=0.2),
+        best_ask=BookLevel(price=100.02, size=0.2),
     )
     assert quote is not None
 
