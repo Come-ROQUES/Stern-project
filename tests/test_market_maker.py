@@ -137,3 +137,44 @@ def test_market_maker_does_not_overfill_same_quote_side_without_requote() -> Non
 
     assert first_fill is not None
     assert second_fill is None
+
+
+def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=10.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100.005,
+        best_bid=BookLevel(price=100.0, size=0.2),
+        best_ask=BookLevel(price=100.01, size=0.2),
+    )
+    assert quote is not None
+
+    no_fill = maker.maybe_fill(
+        PublicTrade(
+            side="buy",
+            price=100.0,
+            size=0.1,
+            ts=datetime.now(tz=UTC),
+        )
+    )
+    fill = maker.maybe_fill(
+        PublicTrade(
+            side="buy",
+            price=100.0,
+            size=0.2,
+            ts=datetime.now(tz=UTC),
+        )
+    )
+
+    assert no_fill is None
+    assert fill is not None
+    assert fill.size == 0.1
