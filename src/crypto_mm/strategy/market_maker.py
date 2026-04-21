@@ -90,12 +90,17 @@ class MarketMaker:
         return quote
 
     def maybe_fill(self, trade: PublicTrade) -> SimFill | None:
-        """Simulate a fill when an observed trade crosses the quoted prices."""
+        """Simulate a fill when a public trade matches our resting maker quote.
+
+        Coinbase `market_trades.side` reports the maker side of the matched
+        order. A `buy` trade therefore means the maker bid traded, while a
+        `sell` trade means the maker ask traded.
+        """
 
         if self._last_quote is None:
             return None
 
-        if trade.side == "sell" and trade.price <= self._last_quote.bid_price:
+        if trade.side == "buy" and trade.price <= self._last_quote.bid_price:
             fill = SimFill(
                 side="buy",
                 price=self._last_quote.bid_price,
@@ -106,7 +111,7 @@ class MarketMaker:
             self._portfolio.apply_fill(fill)
             return fill
 
-        if trade.side == "buy" and trade.price >= self._last_quote.ask_price:
+        if trade.side == "sell" and trade.price >= self._last_quote.ask_price:
             fill = SimFill(
                 side="sell",
                 price=self._last_quote.ask_price,
