@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from crypto_mm.marketdata.models import PublicTrade
+from crypto_mm.marketdata.models import BookLevel, PublicTrade
 from crypto_mm.portfolio.ledger import PortfolioState
 from crypto_mm.risk.limits import RiskLimits
 from crypto_mm.strategy.market_maker import MarketMaker, MarketMakerConfig
@@ -78,3 +78,62 @@ def test_market_maker_realizes_positive_spread_on_bid_then_ask_roundtrip() -> No
     snapshot = portfolio.snapshot(mark_price=100.0)
     assert float(snapshot["position_btc"]) == 0.0
     assert float(snapshot["realized_pnl"]) > 0.0
+
+
+def test_market_maker_anchors_quotes_to_touch_to_capture_real_spread() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=10.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100.005,
+        best_bid=BookLevel(price=100.0, size=1.0),
+        best_ask=BookLevel(price=100.01, size=1.0),
+    )
+
+    assert quote is not None
+    assert quote.bid_price == 100.0
+    assert quote.ask_price == 100.01
+
+
+def test_market_maker_does_not_overfill_same_quote_side_without_requote() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=10.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(mid_price=100.0)
+    assert quote is not None
+
+    first_fill = maker.maybe_fill(
+        PublicTrade(
+            side="buy",
+            price=quote.bid_price,
+            size=0.1,
+            ts=datetime.now(tz=UTC),
+        )
+    )
+    second_fill = maker.maybe_fill(
+        PublicTrade(
+            side="buy",
+            price=quote.bid_price,
+            size=0.1,
+            ts=datetime.now(tz=UTC),
+        )
+    )
+
+    assert first_fill is not None
+    assert second_fill is None
