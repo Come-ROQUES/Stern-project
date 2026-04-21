@@ -17,6 +17,7 @@ class MarketMakerConfig:
     base_quote_spread_bps: float
     order_size_btc: float
     position_skew_bps_per_btc: float
+    inventory_soft_limit_btc: float = 0.5
     vol_adaptive_gain: float = 0.5
     vol_adaptive_cap_bps: float = 30.0
 
@@ -176,7 +177,10 @@ class MarketMaker:
 
     def _next_quote_sizes(self, bid_price: float, ask_price: float) -> tuple[float, float]:
         if self._last_quote is None:
-            return self._config.order_size_btc, self._config.order_size_btc
+            return self._inventory_capped_sizes(
+                self._config.order_size_btc,
+                self._config.order_size_btc,
+            )
 
         bid_size = (
             self._last_quote.bid_size
@@ -188,6 +192,15 @@ class MarketMaker:
             if abs(self._last_quote.ask_price - ask_price) <= 1e-12
             else self._config.order_size_btc
         )
+        return self._inventory_capped_sizes(bid_size, ask_size)
+
+    def _inventory_capped_sizes(self, bid_size: float, ask_size: float) -> tuple[float, float]:
+        soft_limit = max(self._config.inventory_soft_limit_btc, self._config.order_size_btc)
+        position = self._portfolio.position_btc
+        if position > 0:
+            bid_size *= max(0.0, 1.0 - (position / soft_limit))
+        elif position < 0:
+            ask_size *= max(0.0, 1.0 - (abs(position) / soft_limit))
         return bid_size, ask_size
 
     def _refresh_queue_state(

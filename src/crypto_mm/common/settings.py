@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     base_quote_spread_bps: float = 8.0
     order_size_btc: float = 0.1
     position_skew_bps_per_btc: float = 2.0
+    inventory_soft_limit_btc: float = 0.5
     vol_adaptive_gain: float = 1.0
     vol_adaptive_cap_bps: float = 20.0
     trade_history_limit: int = 200

@@ -178,3 +178,29 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     assert no_fill is None
     assert fill is not None
     assert fill.size == 0.1
+
+
+def test_market_maker_turns_off_bid_when_long_inventory_reaches_soft_limit() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    portfolio.position_btc = 0.5
+    portfolio.avg_entry_price = 100.0
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=10.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+            inventory_soft_limit_btc=0.5,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100.005,
+        best_bid=BookLevel(price=100.0, size=1.0),
+        best_ask=BookLevel(price=100.01, size=1.0),
+    )
+
+    assert quote is not None
+    assert quote.bid_size == 0.0
+    assert quote.ask_size == 0.1
