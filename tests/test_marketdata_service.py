@@ -5,6 +5,7 @@ import pytest
 
 from crypto_mm.common.settings import Settings
 from crypto_mm.marketdata.coinbase_ws import MarketDataService
+from crypto_mm.marketdata.models import BookLevel
 
 
 def test_snapshot_bootstrap_exposes_mid_and_quote_immediately() -> None:
@@ -65,3 +66,42 @@ def test_fast_path_keeps_quote_fresh_while_analytics_are_throttled() -> None:
     assert service.market_maker.last_quote is not None
     assert service.market_maker.last_vol_bps == pytest.approx(7.0)
     assert len(service.mid_history) == 0
+
+
+def test_market_trades_capture_fill_edge_and_markout_metrics() -> None:
+    service = MarketDataService(settings=Settings())
+    service.order_book.apply_snapshot(
+        bids=[("100000", "1.0")],
+        asks=[("100010", "1.0")],
+    )
+    quote = service.market_maker.update_quote(
+        mid_price=100005.0,
+        best_bid=BookLevel(price=100000.0, size=1.0),
+        best_ask=BookLevel(price=100010.0, size=1.0),
+    )
+    assert quote is not None
+
+    service._handle_market_trades_message(
+        {
+            "events": [
+                {
+                    "type": "update",
+                    "trades": [
+                        {
+                            "trade_id": "1",
+                            "side": "BUY",
+                            "price": f"{quote.bid_price}",
+                            "size": "0.1",
+                            "time": "2024-01-01T00:00:00Z",
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert len(service.simulated_fills) == 1
+    fill = service.simulated_fills[0]
+    assert fill["mid_price"] == pytest.approx(100005.0)
+    assert float(fill["entry_edge_bps"]) > 0.0
+    assert "current_markout_bps" in fill

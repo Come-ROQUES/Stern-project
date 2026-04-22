@@ -126,12 +126,17 @@ class MarketMaker:
         Coinbase `market_trades.side` reports the maker side of the matched
         order. A `buy` trade therefore means the maker bid traded, while a
         `sell` trade means the maker ask traded.
+
+        We only claim fills when the tape trades exactly at our resting level.
+        Prints through our price are treated as stale/ambiguous because the
+        public feed does not guarantee our order was still at the front of the
+        queue when the move continued through the book.
         """
 
         if self._last_quote is None:
             return None
 
-        if trade.side == "buy" and trade.price <= self._last_quote.bid_price:
+        if trade.side == "buy" and abs(trade.price - self._last_quote.bid_price) <= 1e-12:
             fill_size = self._match_size(
                 trade_price=trade.price,
                 trade_size=trade.size,
@@ -152,7 +157,7 @@ class MarketMaker:
             self._last_quote.bid_size = max(0.0, self._last_quote.bid_size - fill.size)
             return fill
 
-        if trade.side == "sell" and trade.price >= self._last_quote.ask_price:
+        if trade.side == "sell" and abs(trade.price - self._last_quote.ask_price) <= 1e-12:
             fill_size = self._match_size(
                 trade_price=trade.price,
                 trade_size=trade.size,
