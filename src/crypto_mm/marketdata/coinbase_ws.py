@@ -15,7 +15,7 @@ import websockets
 
 from crypto_mm.analytics.spread import SpreadTracker, compute_depth_spreads
 from crypto_mm.common.settings import Settings
-from crypto_mm.marketdata.models import BookLevel, PublicTrade
+from crypto_mm.marketdata.models import BookLevel, PublicTrade, SimFill
 from crypto_mm.marketdata.orderbook import OrderBook
 from crypto_mm.notify import TelegramNotifier
 from crypto_mm.portfolio.ledger import PortfolioState
@@ -320,7 +320,12 @@ class MarketDataService:
                 self.trade_tape.appendleft(trade)
                 fill = self.market_maker.maybe_fill(trade)
                 if fill is not None:
-                    self.simulated_fills.appendleft(fill.model_dump(mode="json"))
+                    fill_payload = fill.model_dump(mode="json")
+                    mid = self.order_book.mid_price()
+                    fill_payload["mid_price"] = mid
+                    fill_payload["entry_edge_bps"] = _fill_entry_edge_bps(fill=fill, mid=mid)
+                    fill_payload["current_markout_bps"] = _fill_markout_bps(fill=fill, mark_price=mid)
+                    self.simulated_fills.appendleft(fill_payload)
 
     async def state_snapshot(self) -> dict[str, object]:
         top = self.order_book.top_n(10)
@@ -413,11 +418,26 @@ class MarketDataService:
         self, quote: object | None, portfolio: dict[str, float | str]
     ) -> dict[str, object]:
         fill_notionals = [float(fill["price"]) * float(fill["size"]) for fill in self.simulated_fills]
+        fill_edges = [
+            float(fill["entry_edge_bps"])
+            for fill in self.simulated_fills
+            if fill.get("entry_edge_bps") is not None
+        ]
+        current_markouts = [
+            float(markout)
+            for markout in (
+                _fill_markout_bps(fill=_fill_from_payload(fill), mark_price=self.order_book.mid_price())
+                for fill in self.simulated_fills
+            )
+            if markout is not None
+        ]
         return {
             "mode": "paper_market_maker",
             "quote_active": quote is not None,
             "fill_count": len(self.simulated_fills),
             "avg_fill_notional": mean(fill_notionals) if fill_notionals else 0.0,
+            "avg_entry_edge_bps": mean(fill_edges) if fill_edges else 0.0,
+            "avg_current_markout_bps": mean(current_markouts) if current_markouts else 0.0,
             "inventory_btc": float(portfolio["position_btc"]),
             "avg_entry_price": float(portfolio["avg_entry_price"]),
             "risk_status": self.market_maker.risk_status,
@@ -499,6 +519,20 @@ class MarketDataService:
         )
         quote_samples = [1.0 if bool(point["active"]) else 0.0 for point in self.quote_history]
         total_pnl = float(portfolio["realized_pnl"]) + float(portfolio["unrealized_pnl"])
+        fill_edges = [
+            float(fill["entry_edge_bps"])
+            for fill in self.simulated_fills
+            if fill.get("entry_edge_bps") is not None
+        ]
+        current_mid = self.order_book.mid_price()
+        fill_markouts = [
+            float(markout)
+            for markout in (
+                _fill_markout_bps(fill=_fill_from_payload(fill), mark_price=current_mid)
+                for fill in self.simulated_fills
+            )
+            if markout is not None
+        ]
         return {
             "mode": "paper_session_replay",
             "status": "ready" if len(equity_curve) >= READINESS_MIN_POINTS else "warming",
@@ -511,6 +545,8 @@ class MarketDataService:
             "fill_count": len(self.simulated_fills),
             "fill_volume_btc": fill_volume,
             "fill_notional_usd": fill_notional,
+            "avg_entry_edge_bps": mean(fill_edges) if fill_edges else 0.0,
+            "avg_current_markout_bps": mean(fill_markouts) if fill_markouts else 0.0,
             "paper_return_pct": (
                 (float(portfolio["equity"]) - self._settings.initial_cash)
                 / self._settings.initial_cash
@@ -616,3 +652,35 @@ def _max_drawdown(curve: list[float]) -> float:
         peak = max(peak, value)
         max_drawdown = min(max_drawdown, value - peak)
     return abs(max_drawdown)
+
+
+def _fill_entry_edge_bps(fill: SimFill, mid: float | None) -> float | None:
+    if mid is None or mid <= 0:
+        return None
+    side = fill.side
+    price = float(fill.price)
+    if side == "buy":
+        return ((mid - price) / mid) * 10_000.0
+    return ((price - mid) / mid) * 10_000.0
+
+
+def _fill_markout_bps(fill: SimFill, mark_price: float | None) -> float | None:
+    if mark_price is None or mark_price <= 0:
+        return None
+    side = fill.side
+    price = float(fill.price)
+    if price <= 0:
+        return None
+    if side == "buy":
+        return ((mark_price - price) / price) * 10_000.0
+    return ((price - mark_price) / price) * 10_000.0
+
+
+def _fill_from_payload(payload: dict[str, float | str]) -> SimFill:
+    return SimFill(
+        side=cast(Literal["buy", "sell"], str(payload["side"])),
+        price=float(payload["price"]),
+        size=float(payload["size"]),
+        ts=_parse_ts(str(payload["ts"])),
+        reason=str(payload.get("reason", "reloaded_fill")),
+    )

@@ -70,7 +70,19 @@ async def api_state_stream() -> StreamingResponse:
 async def export_fills_csv() -> StreamingResponse:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["ts", "side", "price", "size", "notional_usd", "reason"])
+    writer.writerow(
+        [
+            "ts",
+            "side",
+            "price",
+            "size",
+            "notional_usd",
+            "mid_price",
+            "entry_edge_bps",
+            "current_markout_bps",
+            "reason",
+        ]
+    )
     for fill in list(service.simulated_fills):
         price = float(fill["price"])
         size = float(fill["size"])
@@ -81,6 +93,9 @@ async def export_fills_csv() -> StreamingResponse:
                 price,
                 size,
                 price * size,
+                fill.get("mid_price", ""),
+                fill.get("entry_edge_bps", ""),
+                fill.get("current_markout_bps", ""),
                 fill.get("reason", ""),
             ]
         )

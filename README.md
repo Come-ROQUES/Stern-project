@@ -77,13 +77,15 @@ scroll. Design **liquid-glass** sombre, typographie mono, accent neon vert.
   de spread
 - **Microstructure** : pression du carnet, CVD (cumulative volume delta),
   regimes de spread, desequilibre de flux, presets MM
-- **Strategy** : parametres du market maker, PnL et inventaire
 - **Price Chart** : bougies OHLC derivees du mid-history, buckets 1 / 2 / 5 /
   15 / 30 secondes, overlays bid / ask et marqueurs de fills
 - **Portfolio** : equity hero, position card, session flow, table des fills
 - **Risk** : banner de statut pulse, jauges de limite (SVG), config active
-- **Backtest lite** : replay de la session, drawdown max, uptime des quotes,
-  PnL total, return paper
+- **System** : etat du flux Coinbase, throughput de messages, uptime de session
+- **Export** : telechargement CSV des fills, de la serie PnL et des spreads
+- **Paper Session Replay** (mode Backtest) : replay lite de la session MM en
+  cours — return paper, PnL total, drawdown max, uptime des quotes, courbes
+  equity et PnL sur les 60 derniers echantillons
 
 ### Architecture temps reel
 
