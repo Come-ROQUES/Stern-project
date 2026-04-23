@@ -108,7 +108,7 @@ def test_market_maker_realizes_positive_spread_on_bid_then_ask_roundtrip() -> No
     assert float(snapshot["realized_pnl"]) > 0.0
 
 
-def test_market_maker_respects_configured_spread_when_market_is_tighter() -> None:
+def test_market_maker_joins_touch_when_configured_spread_is_wider_than_market() -> None:
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
         config=MarketMakerConfig(
@@ -127,8 +127,8 @@ def test_market_maker_respects_configured_spread_when_market_is_tighter() -> Non
     )
 
     assert quote is not None
-    assert quote.bid_price < 100.0
-    assert quote.ask_price > 100.01
+    assert quote.bid_price == 100.0
+    assert quote.ask_price == 100.01
 
 
 def test_market_maker_caps_bid_to_touch_when_configured_spread_is_too_tight() -> None:
@@ -151,7 +151,7 @@ def test_market_maker_caps_bid_to_touch_when_configured_spread_is_too_tight() ->
 
     assert quote is not None
     assert quote.bid_price == 100.0
-    assert quote.ask_price > 100.01
+    assert quote.ask_price == 100.01
 
 
 def test_market_maker_does_not_overfill_same_quote_side_without_requote() -> None:
@@ -233,14 +233,15 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     quote = maker.update_quote(
         mid_price=100.005,
         best_bid=BookLevel(price=100.0, size=0.2),
-        best_ask=BookLevel(price=100.02, size=0.2),
+        best_ask=BookLevel(price=100.01, size=0.2),
     )
     assert quote is not None
+    assert quote.bid_price == 100.0
 
     no_fill = maker.maybe_fill(
         PublicTrade(
             side="buy",
-            price=100.0,
+            price=quote.bid_price,
             size=0.1,
             ts=datetime.now(tz=UTC),
         )
@@ -248,7 +249,7 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     fill = maker.maybe_fill(
         PublicTrade(
             side="buy",
-            price=100.0,
+            price=quote.bid_price,
             size=0.2,
             ts=datetime.now(tz=UTC),
         )

@@ -92,14 +92,24 @@ class MarketMaker:
 
         bid_price = raw_bid_price
         ask_price = raw_ask_price
-        if best_bid is not None:
-            bid_price = min(bid_price, best_bid.price)
-        if best_ask is not None:
-            ask_price = max(ask_price, best_ask.price)
-        if best_ask is not None:
+        if best_bid is not None and best_ask is not None:
+            # Public trade prints cluster heavily at the touch. When our target
+            # spread is wider than the live spread, joining the best bid/ask is
+            # a better passive-maker approximation than resting deep in the book
+            # where the public feed almost never reveals executions.
+            bid_price = max(raw_bid_price, best_bid.price)
+            ask_price = min(raw_ask_price, best_ask.price)
             bid_price = min(bid_price, best_ask.price - MIN_TICK)
-        if best_bid is not None:
             ask_price = max(ask_price, best_bid.price + MIN_TICK)
+        else:
+            if best_bid is not None:
+                bid_price = min(bid_price, best_bid.price)
+            if best_ask is not None:
+                ask_price = max(ask_price, best_ask.price)
+            if best_ask is not None:
+                bid_price = min(bid_price, best_ask.price - MIN_TICK)
+            if best_bid is not None:
+                ask_price = max(ask_price, best_bid.price + MIN_TICK)
         ask_price = max(ask_price, bid_price + MIN_TICK)
 
         self._last_effective_spread_bps = ((ask_price - bid_price) / mid_price) * 10_000.0
