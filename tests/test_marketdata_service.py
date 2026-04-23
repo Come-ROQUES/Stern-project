@@ -91,7 +91,14 @@ def test_market_trades_capture_fill_edge_and_markout_metrics() -> None:
                             "trade_id": "1",
                             "side": "BUY",
                             "price": f"{quote.bid_price}",
-                            "size": "0.1",
+                            "size": "0.6",
+                            "time": "2024-01-01T00:00:00Z",
+                        },
+                        {
+                            "trade_id": "2",
+                            "side": "BUY",
+                            "price": f"{quote.bid_price}",
+                            "size": "0.6",
                             "time": "2024-01-01T00:00:00Z",
                         }
                     ],
