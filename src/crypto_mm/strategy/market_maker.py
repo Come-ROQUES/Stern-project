@@ -20,6 +20,10 @@ class MarketMakerConfig:
     inventory_soft_limit_btc: float = 0.5
     vol_adaptive_gain: float = 0.5
     vol_adaptive_cap_bps: float = 30.0
+    micro_bias_gain: float = 1.5
+    flow_imbalance_gain_bps_per_btc: float = 6.0
+    signal_skew_cap_bps: float = 12.0
+    adverse_side_threshold_bps: float = 4.0
 
 
 class MarketMaker:
@@ -65,6 +69,8 @@ class MarketMaker:
         best_bid: BookLevel | None = None,
         best_ask: BookLevel | None = None,
         realized_vol_bps: float = 0.0,
+        micro_bias_bps: float = 0.0,
+        trade_flow_imbalance_btc: float = 0.0,
     ) -> Quote | None:
         """Refresh the active quote from the latest mid-price and risk state."""
 
@@ -83,7 +89,16 @@ class MarketMaker:
         target_bps = base_bps + vol_premium_bps
 
         half_spread = mid_price * (target_bps / 10_000.0) / 2.0
-        skew_bps = self._portfolio.position_btc * self._config.position_skew_bps_per_btc
+        inventory_skew_bps = self._portfolio.position_btc * self._config.position_skew_bps_per_btc
+        signal_skew_bps = -(
+            (micro_bias_bps * self._config.micro_bias_gain)
+            + (trade_flow_imbalance_btc * self._config.flow_imbalance_gain_bps_per_btc)
+        )
+        signal_skew_bps = max(
+            -self._config.signal_skew_cap_bps,
+            min(self._config.signal_skew_cap_bps, signal_skew_bps),
+        )
+        skew_bps = inventory_skew_bps + signal_skew_bps
         self._last_skew_bps = skew_bps
         skew = mid_price * (skew_bps / 10_000.0)
 
@@ -113,7 +128,11 @@ class MarketMaker:
         ask_price = max(ask_price, bid_price + MIN_TICK)
 
         self._last_effective_spread_bps = ((ask_price - bid_price) / mid_price) * 10_000.0
-        bid_size, ask_size = self._next_quote_sizes(bid_price=bid_price, ask_price=ask_price)
+        bid_size, ask_size = self._next_quote_sizes(
+            bid_price=bid_price,
+            ask_price=ask_price,
+            signal_skew_bps=signal_skew_bps,
+        )
         self._refresh_queue_state(
             bid_price=bid_price,
             ask_price=ask_price,
@@ -190,11 +209,17 @@ class MarketMaker:
 
         return None
 
-    def _next_quote_sizes(self, bid_price: float, ask_price: float) -> tuple[float, float]:
+    def _next_quote_sizes(
+        self,
+        bid_price: float,
+        ask_price: float,
+        signal_skew_bps: float,
+    ) -> tuple[float, float]:
         if self._last_quote is None:
             return self._inventory_capped_sizes(
                 self._config.order_size_btc,
                 self._config.order_size_btc,
+                signal_skew_bps=signal_skew_bps,
             )
 
         bid_size = (
@@ -207,15 +232,33 @@ class MarketMaker:
             if abs(self._last_quote.ask_price - ask_price) <= 1e-12
             else self._config.order_size_btc
         )
-        return self._inventory_capped_sizes(bid_size, ask_size)
+        return self._inventory_capped_sizes(
+            bid_size,
+            ask_size,
+            signal_skew_bps=signal_skew_bps,
+        )
 
-    def _inventory_capped_sizes(self, bid_size: float, ask_size: float) -> tuple[float, float]:
+    def _inventory_capped_sizes(
+        self,
+        bid_size: float,
+        ask_size: float,
+        signal_skew_bps: float = 0.0,
+    ) -> tuple[float, float]:
         soft_limit = max(self._config.inventory_soft_limit_btc, self._config.order_size_btc)
         position = self._portfolio.position_btc
         if position > 0:
             bid_size *= max(0.0, 1.0 - (position / soft_limit))
         elif position < 0:
             ask_size *= max(0.0, 1.0 - (abs(position) / soft_limit))
+        threshold = self._config.adverse_side_threshold_bps
+        if signal_skew_bps > 0:
+            bid_size *= max(0.0, 1.0 - (signal_skew_bps / max(threshold * 2.0, 1e-12)))
+            if position > 0 and signal_skew_bps >= threshold:
+                bid_size = 0.0
+        elif signal_skew_bps < 0:
+            ask_size *= max(0.0, 1.0 - (abs(signal_skew_bps) / max(threshold * 2.0, 1e-12)))
+            if position < 0 and abs(signal_skew_bps) >= threshold:
+                ask_size = 0.0
         return bid_size, ask_size
 
     def _refresh_queue_state(

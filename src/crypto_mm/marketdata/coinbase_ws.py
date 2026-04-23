@@ -144,6 +144,8 @@ class MarketDataService:
             best_bid=self.order_book.best_bid(),
             best_ask=self.order_book.best_ask(),
             realized_vol_bps=self._last_vol_bps,
+            micro_bias_bps=_micro_bias_bps(top=self.order_book.top_n(1), mid=mid),
+            trade_flow_imbalance_btc=_trade_flow_imbalance(list(self.trade_tape)[:50]),
         )
         self._maybe_record_mid(mid)
         self._maybe_refresh_analytics(mid=mid, quote_active=quote is not None)
@@ -218,6 +220,8 @@ class MarketDataService:
             best_bid=self.order_book.best_bid(),
             best_ask=self.order_book.best_ask(),
             realized_vol_bps=self._last_vol_bps,
+            micro_bias_bps=_micro_bias_bps(top=self.order_book.top_n(1), mid=mid),
+            trade_flow_imbalance_btc=_trade_flow_imbalance(list(self.trade_tape)[:50]),
         )
         self._publish_state(force=True)
 
@@ -251,6 +255,8 @@ class MarketDataService:
             best_bid=self.order_book.best_bid(),
             best_ask=self.order_book.best_ask(),
             realized_vol_bps=self._last_vol_bps,
+            micro_bias_bps=_micro_bias_bps(top=self.order_book.top_n(1), mid=mid),
+            trade_flow_imbalance_btc=_trade_flow_imbalance(list(self.trade_tape)[:50]),
         )
         spreads = compute_depth_spreads(self.order_book)
         self.spread_tracker.record(spreads)
