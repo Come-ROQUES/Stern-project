@@ -24,6 +24,7 @@ class MarketMakerConfig:
     flow_imbalance_gain_bps_per_btc: float = 6.0
     signal_skew_cap_bps: float = 12.0
     adverse_side_threshold_bps: float = 4.0
+    flat_adverse_side_threshold_bps: float = 6.0
 
 
 class MarketMaker:
@@ -251,13 +252,18 @@ class MarketMaker:
         elif position < 0:
             ask_size *= max(0.0, 1.0 - (abs(position) / soft_limit))
         threshold = self._config.adverse_side_threshold_bps
+        flat_threshold = max(threshold, self._config.flat_adverse_side_threshold_bps)
         if signal_skew_bps > 0:
             bid_size *= max(0.0, 1.0 - (signal_skew_bps / max(threshold * 2.0, 1e-12)))
-            if position > 0 and signal_skew_bps >= threshold:
+            if signal_skew_bps >= flat_threshold or (
+                position > 0 and signal_skew_bps >= threshold
+            ):
                 bid_size = 0.0
         elif signal_skew_bps < 0:
             ask_size *= max(0.0, 1.0 - (abs(signal_skew_bps) / max(threshold * 2.0, 1e-12)))
-            if position < 0 and abs(signal_skew_bps) >= threshold:
+            if abs(signal_skew_bps) >= flat_threshold or (
+                position < 0 and abs(signal_skew_bps) >= threshold
+            ):
                 ask_size = 0.0
         return bid_size, ask_size
 
