@@ -72,12 +72,12 @@ def test_market_trades_capture_fill_edge_and_markout_metrics() -> None:
     service = MarketDataService(settings=Settings())
     service.order_book.apply_snapshot(
         bids=[("100000", "1.0")],
-        asks=[("100010", "1.0")],
+        asks=[("100020", "1.0")],
     )
     quote = service.market_maker.update_quote(
-        mid_price=100005.0,
+        mid_price=100010.0,
         best_bid=BookLevel(price=100000.0, size=1.0),
-        best_ask=BookLevel(price=100010.0, size=1.0),
+        best_ask=BookLevel(price=100020.0, size=1.0),
     )
     assert quote is not None
 
@@ -91,14 +91,14 @@ def test_market_trades_capture_fill_edge_and_markout_metrics() -> None:
                             "trade_id": "1",
                             "side": "BUY",
                             "price": f"{quote.bid_price}",
-                            "size": "0.6",
+                            "size": "1.6",
                             "time": "2024-01-01T00:00:00Z",
                         },
                         {
                             "trade_id": "2",
                             "side": "BUY",
                             "price": f"{quote.bid_price}",
-                            "size": "0.6",
+                            "size": "1.6",
                             "time": "2024-01-01T00:00:00Z",
                         }
                     ],
@@ -109,6 +109,6 @@ def test_market_trades_capture_fill_edge_and_markout_metrics() -> None:
 
     assert len(service.simulated_fills) == 1
     fill = service.simulated_fills[0]
-    assert fill["mid_price"] == pytest.approx(100005.0)
+    assert fill["mid_price"] == pytest.approx(100010.0)
     assert float(fill["entry_edge_bps"]) > 0.0
     assert "current_markout_bps" in fill

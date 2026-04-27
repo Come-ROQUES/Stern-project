@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+import pytest
+
 from crypto_mm.marketdata.models import BookLevel, PublicTrade
 from crypto_mm.portfolio.ledger import PortfolioState
 from crypto_mm.risk.limits import RiskLimits
@@ -135,7 +137,7 @@ def test_market_maker_caps_bid_to_touch_when_configured_spread_is_too_tight() ->
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
         config=MarketMakerConfig(
-            base_quote_spread_bps=0.5,
+            base_quote_spread_bps=3.0,
             order_size_btc=0.1,
             position_skew_bps_per_btc=0.0,
         ),
@@ -222,7 +224,7 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
         config=MarketMakerConfig(
-            base_quote_spread_bps=0.5,
+            base_quote_spread_bps=3.0,
             order_size_btc=0.1,
             position_skew_bps_per_btc=0.0,
         ),
@@ -231,9 +233,9 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
     )
 
     quote = maker.update_quote(
-        mid_price=100.005,
+        mid_price=100.01,
         best_bid=BookLevel(price=100.0, size=0.2),
-        best_ask=BookLevel(price=100.01, size=0.2),
+        best_ask=BookLevel(price=100.02, size=0.2),
     )
     assert quote is not None
     assert quote.bid_price == 100.0
@@ -250,14 +252,64 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
         PublicTrade(
             side="buy",
             price=quote.bid_price,
-            size=0.2,
+            size=0.6,
             ts=datetime.now(tz=UTC),
         )
     )
 
     assert no_fill is None
     assert fill is not None
-    assert fill.size == 0.1
+    assert fill.size == pytest.approx(0.1)
+
+
+def test_market_maker_stands_down_when_touch_spread_is_too_thin_and_inventory_is_flat() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=8.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+            min_join_spread_bps=1.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100000.005,
+        best_bid=BookLevel(price=100000.0, size=1.0),
+        best_ask=BookLevel(price=100000.01, size=1.0),
+    )
+
+    assert quote is not None
+    assert quote.bid_size == 0.0
+    assert quote.ask_size == 0.0
+
+
+def test_market_maker_keeps_only_unwind_side_in_thin_market() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    portfolio.position_btc = 0.2
+    portfolio.avg_entry_price = 100000.0
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=8.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+            min_join_spread_bps=1.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(
+        mid_price=100000.005,
+        best_bid=BookLevel(price=100000.0, size=1.0),
+        best_ask=BookLevel(price=100000.01, size=1.0),
+    )
+
+    assert quote is not None
+    assert quote.bid_size == 0.0
+    assert quote.ask_size > 0.0
 
 
 def test_market_maker_turns_off_bid_when_long_inventory_reaches_soft_limit() -> None:
@@ -326,9 +378,9 @@ def test_market_maker_turns_off_bid_when_flat_book_faces_strong_bearish_signal()
     )
 
     quote = maker.update_quote(
-        mid_price=100.005,
+        mid_price=100.01,
         best_bid=BookLevel(price=100.0, size=1.0),
-        best_ask=BookLevel(price=100.01, size=1.0),
+        best_ask=BookLevel(price=100.02, size=1.0),
         micro_bias_bps=-3.0,
         trade_flow_imbalance_btc=-0.6,
     )
@@ -378,9 +430,9 @@ def test_market_maker_turns_off_ask_when_flat_book_faces_strong_bullish_signal()
     )
 
     quote = maker.update_quote(
-        mid_price=100.005,
+        mid_price=100.01,
         best_bid=BookLevel(price=100.0, size=1.0),
-        best_ask=BookLevel(price=100.01, size=1.0),
+        best_ask=BookLevel(price=100.02, size=1.0),
         micro_bias_bps=3.0,
         trade_flow_imbalance_btc=0.6,
     )

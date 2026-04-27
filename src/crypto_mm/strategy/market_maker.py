@@ -25,6 +25,8 @@ class MarketMakerConfig:
     signal_skew_cap_bps: float = 12.0
     adverse_side_threshold_bps: float = 4.0
     flat_adverse_side_threshold_bps: float = 6.0
+    min_join_spread_bps: float = 1.0
+    touch_queue_ahead_factor: float = 3.0
 
 
 class MarketMaker:
@@ -127,6 +129,9 @@ class MarketMaker:
             if best_bid is not None:
                 ask_price = max(ask_price, best_bid.price + MIN_TICK)
         ask_price = max(ask_price, bid_price + MIN_TICK)
+        live_spread_bps = 0.0
+        if best_bid is not None and best_ask is not None and mid_price > 0:
+            live_spread_bps = ((best_ask.price - best_bid.price) / mid_price) * 10_000.0
 
         self._last_effective_spread_bps = ((ask_price - bid_price) / mid_price) * 10_000.0
         bid_size, ask_size = self._next_quote_sizes(
@@ -134,6 +139,19 @@ class MarketMaker:
             ask_price=ask_price,
             signal_skew_bps=signal_skew_bps,
         )
+        if (
+            best_bid is not None
+            and best_ask is not None
+            and live_spread_bps < self._config.min_join_spread_bps
+        ):
+            position = self._portfolio.position_btc
+            if position > 0:
+                bid_size = 0.0
+            elif position < 0:
+                ask_size = 0.0
+            else:
+                bid_size = 0.0
+                ask_size = 0.0
         self._refresh_queue_state(
             bid_price=bid_price,
             ask_price=ask_price,
@@ -275,18 +293,29 @@ class MarketMaker:
         best_ask: BookLevel | None,
     ) -> None:
         if self._last_quote is None or abs(self._last_quote.bid_price - bid_price) > 1e-12:
-            self._bid_queue_ahead = best_bid.size if best_bid is not None and abs(best_bid.price - bid_price) <= 1e-12 else 0.0
+            self._bid_queue_ahead = self._queue_ahead_at_touch(best_bid, bid_price)
         elif best_bid is not None and abs(best_bid.price - bid_price) <= 1e-12:
-            self._bid_queue_ahead = min(self._bid_queue_ahead, best_bid.size)
+            self._bid_queue_ahead = min(
+                self._bid_queue_ahead,
+                self._queue_ahead_at_touch(best_bid, bid_price),
+            )
         else:
             self._bid_queue_ahead = 0.0
 
         if self._last_quote is None or abs(self._last_quote.ask_price - ask_price) > 1e-12:
-            self._ask_queue_ahead = best_ask.size if best_ask is not None and abs(best_ask.price - ask_price) <= 1e-12 else 0.0
+            self._ask_queue_ahead = self._queue_ahead_at_touch(best_ask, ask_price)
         elif best_ask is not None and abs(best_ask.price - ask_price) <= 1e-12:
-            self._ask_queue_ahead = min(self._ask_queue_ahead, best_ask.size)
+            self._ask_queue_ahead = min(
+                self._ask_queue_ahead,
+                self._queue_ahead_at_touch(best_ask, ask_price),
+            )
         else:
             self._ask_queue_ahead = 0.0
+
+    def _queue_ahead_at_touch(self, level: BookLevel | None, quote_price: float) -> float:
+        if level is None or abs(level.price - quote_price) > 1e-12:
+            return 0.0
+        return level.size * self._config.touch_queue_ahead_factor
 
     def _match_size(
         self,
