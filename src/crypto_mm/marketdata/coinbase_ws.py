@@ -67,6 +67,9 @@ class MarketDataService:
                 vol_adaptive_cap_bps=settings.vol_adaptive_cap_bps,
                 min_join_spread_bps=settings.min_join_spread_bps,
                 touch_queue_ahead_factor=settings.touch_queue_ahead_factor,
+                inventory_cycle_bias=settings.inventory_cycle_bias,
+                long_only_bias=settings.long_only_bias,
+                min_exit_profit_bps=settings.min_exit_profit_bps,
             ),
             portfolio=self.portfolio,
             risk_limits=RiskLimits(

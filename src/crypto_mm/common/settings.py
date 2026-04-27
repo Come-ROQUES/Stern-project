@@ -25,8 +25,11 @@ class Settings(BaseSettings):
     inventory_soft_limit_btc: float = 0.5
     vol_adaptive_gain: float = 1.0
     vol_adaptive_cap_bps: float = 20.0
-    min_join_spread_bps: float = 1.0
-    touch_queue_ahead_factor: float = 3.0
+    min_join_spread_bps: float = 0.0
+    touch_queue_ahead_factor: float = 0.0
+    inventory_cycle_bias: bool = True
+    long_only_bias: bool = True
+    min_exit_profit_bps: float = 2.0
     trade_history_limit: int = 200
     # Optional Telegram alerts. Disabled when either field is empty.
     telegram_bot_token: str = ""

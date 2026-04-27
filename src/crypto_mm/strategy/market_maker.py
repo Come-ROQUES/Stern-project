@@ -25,8 +25,11 @@ class MarketMakerConfig:
     signal_skew_cap_bps: float = 12.0
     adverse_side_threshold_bps: float = 4.0
     flat_adverse_side_threshold_bps: float = 6.0
-    min_join_spread_bps: float = 1.0
-    touch_queue_ahead_factor: float = 3.0
+    min_join_spread_bps: float = 0.0
+    touch_queue_ahead_factor: float = 0.0
+    inventory_cycle_bias: bool = True
+    long_only_bias: bool = True
+    min_exit_profit_bps: float = 2.0
 
 
 class MarketMaker:
@@ -128,6 +131,11 @@ class MarketMaker:
                 bid_price = min(bid_price, best_ask.price - MIN_TICK)
             if best_bid is not None:
                 ask_price = max(ask_price, best_bid.price + MIN_TICK)
+        if self._config.inventory_cycle_bias:
+            bid_price, ask_price = self._cycle_bias_prices(
+                bid_price=bid_price,
+                ask_price=ask_price,
+            )
         ask_price = max(ask_price, bid_price + MIN_TICK)
         live_spread_bps = 0.0
         if best_bid is not None and best_ask is not None and mid_price > 0:
@@ -283,7 +291,30 @@ class MarketMaker:
                 position < 0 and abs(signal_skew_bps) >= threshold
             ):
                 ask_size = 0.0
+        if self._config.inventory_cycle_bias:
+            if position > 1e-12:
+                bid_size = 0.0
+                ask_size = max(ask_size, self._config.order_size_btc)
+            elif position < -1e-12:
+                ask_size = 0.0
+                bid_size = max(bid_size, self._config.order_size_btc)
+            elif self._config.long_only_bias:
+                ask_size = 0.0
         return bid_size, ask_size
+
+    def _cycle_bias_prices(self, bid_price: float, ask_price: float) -> tuple[float, float]:
+        position = self._portfolio.position_btc
+        if position > 1e-12:
+            min_ask = self._portfolio.avg_entry_price * (
+                1.0 + (self._config.min_exit_profit_bps / 10_000.0)
+            )
+            ask_price = max(ask_price, min_ask)
+        elif position < -1e-12:
+            max_bid = self._portfolio.avg_entry_price * (
+                1.0 - (self._config.min_exit_profit_bps / 10_000.0)
+            )
+            bid_price = min(bid_price, max_bid)
+        return bid_price, ask_price
 
     def _refresh_queue_state(
         self,

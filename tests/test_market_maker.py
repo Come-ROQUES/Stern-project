@@ -140,6 +140,9 @@ def test_market_maker_caps_bid_to_touch_when_configured_spread_is_too_tight() ->
             base_quote_spread_bps=3.0,
             order_size_btc=0.1,
             position_skew_bps_per_btc=0.0,
+            touch_queue_ahead_factor=3.0,
+            inventory_cycle_bias=False,
+            long_only_bias=False,
         ),
         portfolio=portfolio,
         risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
@@ -227,6 +230,9 @@ def test_market_maker_waits_for_queue_ahead_at_touch() -> None:
             base_quote_spread_bps=3.0,
             order_size_btc=0.1,
             position_skew_bps_per_btc=0.0,
+            touch_queue_ahead_factor=3.0,
+            inventory_cycle_bias=False,
+            long_only_bias=False,
         ),
         portfolio=portfolio,
         risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
@@ -347,6 +353,8 @@ def test_market_maker_turns_off_bid_when_long_inventory_faces_bearish_signal() -
             base_quote_spread_bps=1.5,
             order_size_btc=0.1,
             position_skew_bps_per_btc=2.0,
+            inventory_cycle_bias=False,
+            long_only_bias=False,
         ),
         portfolio=portfolio,
         risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
@@ -365,6 +373,48 @@ def test_market_maker_turns_off_bid_when_long_inventory_faces_bearish_signal() -
     assert quote.ask_size > 0.0
 
 
+def test_market_maker_prefers_bid_only_when_flat() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=8.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(mid_price=100.0)
+
+    assert quote is not None
+    assert quote.bid_size > 0.0
+    assert quote.ask_size == 0.0
+
+
+def test_market_maker_unwinds_long_above_entry() -> None:
+    portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
+    portfolio.position_btc = 0.1
+    portfolio.avg_entry_price = 100.0
+    maker = MarketMaker(
+        config=MarketMakerConfig(
+            base_quote_spread_bps=2.0,
+            order_size_btc=0.1,
+            position_skew_bps_per_btc=0.0,
+            min_exit_profit_bps=2.0,
+        ),
+        portfolio=portfolio,
+        risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
+    )
+
+    quote = maker.update_quote(mid_price=99.95)
+
+    assert quote is not None
+    assert quote.bid_size == 0.0
+    assert quote.ask_size > 0.0
+    assert quote.ask_price >= 100.02
+
+
 def test_market_maker_turns_off_bid_when_flat_book_faces_strong_bearish_signal() -> None:
     portfolio = PortfolioState.bootstrap(initial_cash=1_000_000, trade_history_limit=20)
     maker = MarketMaker(
@@ -372,6 +422,8 @@ def test_market_maker_turns_off_bid_when_flat_book_faces_strong_bearish_signal()
             base_quote_spread_bps=1.5,
             order_size_btc=0.1,
             position_skew_bps_per_btc=2.0,
+            inventory_cycle_bias=False,
+            long_only_bias=False,
         ),
         portfolio=portfolio,
         risk_limits=RiskLimits(max_notional_exposure=1_000_000, max_loss=100_000),
